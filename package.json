@@ -1,0 +1,38 @@
+{
+  "name": "projection-follower",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Personal, single-user bet tracker. Pulls your own bet history from sportsbooks via authenticated browser automation, normalizes it, and shows W/L, ROI, and exposure on one dashboard.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "pf": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
+    "dev:server": "tsx watch src/server/index.ts",
+    "start": "node dist/server/index.js",
+    "cli": "tsx src/cli/index.ts",
+    "login": "tsx src/cli/index.ts login",
+    "sync": "tsx src/cli/index.ts sync",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "web:dev": "npm --prefix web run dev",
+    "web:build": "npm --prefix web run build",
+    "postinstall": "playwright install chromium || true"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "playwright": "^1.50.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.13.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

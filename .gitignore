@@ -1,0 +1,18 @@
+node_modules/
+dist/
+web/dist/
+web/node_modules/
+*.tsbuildinfo
+
+# Local data — never commit. Contains your DB and, critically, your
+# authenticated browser session (cookies/tokens ~ live credentials).
+data/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+.env
+.env.local
+.DS_Store
+*.log
