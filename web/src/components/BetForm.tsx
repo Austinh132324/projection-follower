@@ -28,12 +28,16 @@ export function BetForm({
   title,
   onSave,
   onClose,
+  onSkip,
+  stepLabel,
   ocrText,
 }: {
   initial: BetDraft;
   title: string;
   onSave: (bet: Bet) => void;
   onClose: () => void;
+  onSkip?: () => void;
+  stepLabel?: string;
   ocrText?: string;
 }) {
   const [draft, setDraft] = useState<BetDraft>(initial);
@@ -65,7 +69,10 @@ export function BetForm({
     >
       <div className="modal-inner">
         <div className="modal-head">
-          <h2>{title}</h2>
+          <div>
+            {stepLabel && <div className="eyebrow" style={{ marginBottom: 2 }}>{stepLabel}</div>}
+            <h2>{title}</h2>
+          </div>
           <button className="icon-btn" onClick={onClose} aria-label="Close">
             <CloseIcon />
           </button>
@@ -214,15 +221,22 @@ export function BetForm({
           </details>
         )}
 
-        <motion.button
-          className="btn"
-          style={{ marginTop: 20 }}
-          disabled={!canSave}
-          whileTap={{ scale: 0.97 }}
-          onClick={() => onSave(draftToBet(draft))}
-        >
-          Save
-        </motion.button>
+        <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+          {onSkip && (
+            <motion.button className="btn secondary" style={{ flex: '0 0 34%' }} whileTap={{ scale: 0.97 }} onClick={onSkip}>
+              Skip
+            </motion.button>
+          )}
+          <motion.button
+            className="btn"
+            style={{ flex: 1 }}
+            disabled={!canSave}
+            whileTap={{ scale: 0.97 }}
+            onClick={() => onSave(draftToBet(draft))}
+          >
+            Save
+          </motion.button>
+        </div>
       </div>
     </motion.div>
   );

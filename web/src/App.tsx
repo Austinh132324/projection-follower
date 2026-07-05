@@ -21,16 +21,14 @@ type Overlay =
   | { kind: 'none' }
   | { kind: 'add' }
   | { kind: 'manual' }
-  | { kind: 'photo'; file: File }
+  | { kind: 'photo'; files: File[] }
   | { kind: 'detail'; bet: Bet };
 
 export default function App() {
   const { isAuthed } = useAuth();
-  return (
-    <AnimatePresence mode="wait">
-      {isAuthed ? <Shell key="shell" /> : <Login key="login" />}
-    </AnimatePresence>
-  );
+  // Plain conditional render (no AnimatePresence here): the auth components
+  // aren't motion elements, and mode="wait" would stall the logout swap.
+  return isAuthed ? <Shell /> : <Login />;
 }
 
 function Shell() {
@@ -47,9 +45,17 @@ function Shell() {
 
   useEffect(() => reload(), [reload]);
 
+  // Persist without closing the overlay (photo review saves several in a row).
+  const persist = useCallback(
+    async (bet: Bet) => {
+      await saveBet(bet);
+      reload();
+    },
+    [reload],
+  );
+
   const handleSave = async (bet: Bet) => {
-    await saveBet(bet);
-    reload();
+    await persist(bet);
     setOverlay({ kind: 'none' });
   };
 
@@ -97,14 +103,14 @@ function Shell() {
             key="add"
             onClose={close}
             onManual={() => setOverlay({ kind: 'manual' })}
-            onPhotoFile={(file) => setOverlay({ kind: 'photo', file })}
+            onPhotoFiles={(files) => setOverlay({ kind: 'photo', files })}
           />
         )}
         {overlay.kind === 'manual' && (
           <BetForm key="manual" initial={emptyDraft('manual')} title="New bet" onSave={handleSave} onClose={close} />
         )}
         {overlay.kind === 'photo' && (
-          <PhotoImport key="photo" file={overlay.file} onSave={handleSave} onClose={close} />
+          <PhotoImport key="photo" files={overlay.files} onSave={persist} onClose={close} />
         )}
         {overlay.kind === 'detail' && (
           <BetDetail key="detail" bet={overlay.bet} onClose={close} onDelete={handleDelete} />
