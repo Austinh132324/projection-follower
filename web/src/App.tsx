@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from './auth';
 import { Login } from './components/Login';
 import { BottomNav, type Tab } from './components/BottomNav';
+import { FullscreenToggle } from './components/FullscreenToggle';
 import { AddSheet } from './components/AddSheet';
 import { BetForm } from './components/BetForm';
 import { PhotoImport } from './components/PhotoImport';
@@ -63,6 +64,7 @@ function Shell() {
 
   return (
     <div className="app">
+      <FullscreenToggle />
       <AnimatePresence mode="wait">
         <motion.div
           key={tab}

@@ -48,7 +48,6 @@ export function Login() {
             setUsername(e.target.value);
             setError('');
           }}
-          placeholder="austin"
         />
       </div>
 
@@ -62,7 +61,6 @@ export function Login() {
             setPassword(e.target.value);
             setError('');
           }}
-          placeholder="••••••"
         />
       </div>
 

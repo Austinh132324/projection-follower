@@ -1,15 +1,18 @@
-# Manual deploy of the dashboard to GitHub Pages.
+# Deploys the dashboard to GitHub Pages — the static, on-device build (no
+# backend), so it runs anywhere including a phone browser. Deploys automatically
+# on every push to the branches below, and can also be run by hand from the
+# Actions tab. VITE_USE_MOCK=true bakes in the browser-stored data mode.
 #
-# This publishes the STATIC, mock-data build of the web app (no backend), so it
-# runs anywhere — including a phone browser. Trigger it by hand from the Actions
-# tab ("Run workflow"). VITE_USE_MOCK=true bakes in the bundled demo data.
-#
-# One-time setup: repo Settings → Pages → "Build and deployment" → Source =
-# "GitHub Actions".
+# One-time setup (only you can do this): repo Settings → Pages → "Build and
+# deployment" → Source = "GitHub Actions". After that, each push deploys.
 name: Deploy dashboard to Pages
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+      - claude/bet-tracker-architecture-67o15l
 
 permissions:
   contents: read
