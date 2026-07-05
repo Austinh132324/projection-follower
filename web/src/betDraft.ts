@@ -51,6 +51,12 @@ export function americanToDecimal(odds: number): number {
   return odds > 0 ? 1 + odds / 100 : 1 + 100 / Math.abs(odds);
 }
 
+export function decimalToAmerican(dec: number): number {
+  if (dec <= 1) return 0;
+  const profit = dec - 1;
+  return profit >= 1 ? Math.round(profit * 100) : Math.round(-100 / profit);
+}
+
 function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }

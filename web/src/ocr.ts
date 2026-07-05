@@ -52,8 +52,12 @@ export const tesseractParser: BetSlipParser = {
 
     // PrizePicks entries look nothing like a straight betslip — route them to a
     // dedicated parser that pulls players and reads passed/failed from colour.
-    if (/prize\s*picks|\b\d+[-\s]?pick\b|flex play|power play|pick.?em/i.test(text)) {
-      return { drafts: [parsePrizePicks(text, lines, canvas)], text, confidence: 0.7 };
+    // Detect by keywords OR by several player stat-lines ("0.5 Goals", "27.5
+    // Points"), which survive when OCR garbles the "N-Pick Flex Play" header.
+    const statHits = (text.match(/\d+(?:\.\d+)?\s*(goals?|points?|assists?|rebounds?|shots?|saves?|pts|reb|ast|hits?|bases?|strikeouts?|receptions?|yards?)/gi) ?? []).length;
+    if (/prize\s*picks|\b\d+[-\s]?pick\b|flex play|power play|pick.?em/i.test(text) || statHits >= 2) {
+      const pp = parsePrizePicks(text, lines, canvas);
+      if (pp.legs.some((l) => l.selection.trim())) return { drafts: [pp], text, confidence: 0.7 };
     }
 
     // A "My Bets" list holds several bets — split into blocks and parse each.
@@ -229,7 +233,8 @@ function parsePrizePicks(text: string, lines: OcrLine[], canvas: HTMLCanvasEleme
 
   // Find each pick's player: the line directly above a subtitle line.
   const subtitles = lines.filter((l) => PP_SUBTITLE.test(l.text) || /(•|·).+(•|·)/.test(l.text));
-  const players: { name: string; y0: number; y1: number }[] = [];
+  let players: { name: string; y0: number; y1: number }[] = [];
+  let hasGeometry = true;
   for (const sub of subtitles) {
     const above = lines
       .filter((l) => l.y1 <= sub.y0 + 6 && sub.y0 - l.y1 < 120 && looksLikeName(l.text))
@@ -237,11 +242,24 @@ function parsePrizePicks(text: string, lines: OcrLine[], canvas: HTMLCanvasEleme
     if (above) players.push({ name: cleanName(above.text), y0: above.y0, y1: sub.y1 });
   }
 
-  // Fallback when OCR gave no usable geometry: mine names straight from text.
+  // Fallback: mine names straight from the raw text using the subtitle or stat
+  // line as the anchor (the player name sits just above it). Works even when OCR
+  // gives no bounding boxes — but then we can't map the green bars, so results
+  // stay unknown for review.
   if (players.length === 0) {
-    for (let i = 0; i < lines.length - 1; i++) {
-      if ((PP_SUBTITLE.test(lines[i + 1]!.text) || /(•|·)/.test(lines[i + 1]!.text)) && looksLikeName(lines[i]!.text)) {
-        players.push({ name: cleanName(lines[i]!.text), y0: lines[i]!.y0, y1: lines[i + 1]!.y1 });
+    hasGeometry = false;
+    const raw = text.split(/\n+/).map((s) => s.trim()).filter((s) => s.length > 1);
+    const seen = new Set<string>();
+    for (let i = 0; i < raw.length; i++) {
+      const anchor = PP_SUBTITLE.test(raw[i]!) || /(•|·)/.test(raw[i]!) || STAT_RE.test(raw[i]!) || /\b(over|under)\b/i.test(raw[i]!);
+      if (!anchor) continue;
+      for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
+        const name = cleanName(raw[j]!);
+        if (looksLikeName(raw[j]!) && !seen.has(name)) {
+          seen.add(name);
+          players.push({ name, y0: 0, y1: 0 });
+          break;
+        }
       }
     }
   }
@@ -249,8 +267,9 @@ function parsePrizePicks(text: string, lines: OcrLine[], canvas: HTMLCanvasEleme
   const legs: DraftLeg[] = players.map((p, i) => {
     const next = players[i + 1];
     const regionEnd = next ? next.y0 : (canvas?.height ?? Number.MAX_SAFE_INTEGER);
-    // Passed if a green bar sits in this pick's vertical region.
-    const passed = bands.some((b) => bandCenter(b) >= p.y0 && bandCenter(b) < regionEnd);
+    // Passed if a green bar sits in this pick's vertical region (only meaningful
+    // when we have real geometry from OCR bounding boxes).
+    const passed = hasGeometry && bands.some((b) => bandCenter(b) >= p.y0 && bandCenter(b) < regionEnd);
 
     // Stat line for this pick: a "0.5 Goals"-style token near the player row.
     const statLine = lines.find(

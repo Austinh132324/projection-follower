@@ -1,14 +1,15 @@
 import { motion } from 'framer-motion';
-import { HomeIcon, ListIcon, ChartIcon, GearIcon, PlusIcon } from './icons';
+import { HomeIcon, ListIcon, ChartIcon, GearIcon, PlusIcon, ScoutIcon } from './icons';
 import type { ReactNode } from 'react';
 
-export type Tab = 'home' | 'bets' | 'stats' | 'settings';
+export type Tab = 'home' | 'bets' | 'scout' | 'stats' | 'settings';
 
 const LEFT: { id: Tab; label: string; icon: (p: { active?: boolean }) => ReactNode }[] = [
   { id: 'home', label: 'Home', icon: HomeIcon },
   { id: 'bets', label: 'Bets', icon: ListIcon },
 ];
 const RIGHT: { id: Tab; label: string; icon: (p: { active?: boolean }) => ReactNode }[] = [
+  { id: 'scout', label: 'Scout', icon: ScoutIcon },
   { id: 'stats', label: 'Stats', icon: ChartIcon },
   { id: 'settings', label: 'Settings', icon: GearIcon },
 ];

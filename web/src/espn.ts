@@ -418,3 +418,115 @@ export async function assessBet(bet: Bet): Promise<EspnInsight> {
     return { matched: false, error: err instanceof Error ? err.message : 'ESPN request failed' };
   }
 }
+
+// --- Scout: rank upcoming games by win probability ("locks") ----------------
+
+export interface ScoutPick {
+  eventId: string;
+  league: string;
+  matchup: string;        // "DEN @ KC"
+  favName: string;
+  favAbbr: string;
+  oppAbbr: string;
+  /** Model (or market-implied) win probability for the favorite, 0–100. */
+  favWinPct: number;
+  fairOdds: number | null;    // American, from the win %
+  marketOdds: number | null;  // American, ESPN's published line for the favorite
+  edgePct: number | null;     // favWinPct − market-implied %  (>0 = value)
+  source: 'model' | 'market';
+  date: string;
+  statusDetail: string;
+}
+
+/**
+ * Scan a league's upcoming games and rank them by the favorite's win
+ * probability — the biggest "locks". Uses ESPN's Matchup Predictor when
+ * available, else the market-implied probability from the published line.
+ * Runs one summary request per game (capped), in parallel.
+ */
+export async function scoutLeague(
+  leagueId: string,
+  opts: { maxGames?: number } = {},
+): Promise<ScoutPick[]> {
+  const league = leagueById(leagueId);
+  if (!league) return [];
+  const maxGames = opts.maxGames ?? 12;
+  const base = new Date().toISOString();
+
+  // Collect upcoming games across today + the next couple of days.
+  const events: EspnEvent[] = [];
+  const seen = new Set<string>();
+  for (const off of [0, 1, 2]) {
+    if (events.length >= maxGames) break;
+    let day: EspnEvent[];
+    try {
+      day = await fetchScoreboard(league, shiftDays(base, off));
+    } catch {
+      continue;
+    }
+    for (const ev of day) {
+      if (ev.state === 'pre' && !seen.has(ev.id)) {
+        seen.add(ev.id);
+        events.push(ev);
+      }
+    }
+  }
+
+  const picks = await Promise.all(
+    events.slice(0, maxGames).map(async (ev): Promise<ScoutPick | null> => {
+      const home = ev.competitors.find((c) => c.homeAway === 'home');
+      const away = ev.competitors.find((c) => c.homeAway === 'away');
+      if (!home || !away) return null;
+      let summary: Awaited<ReturnType<typeof fetchSummary>>;
+      try {
+        summary = await fetchSummary(league, ev.id);
+      } catch {
+        return null;
+      }
+
+      let favWinPct: number | null = null;
+      let fav = home;
+      let opp = away;
+      let marketOdds: number | null = null;
+      let source: 'model' | 'market' = 'model';
+
+      const { home: hp, away: ap } = summary.predictor;
+      if (hp != null && ap != null) {
+        if (hp >= ap) { favWinPct = hp; fav = home; opp = away; } else { favWinPct = ap; fav = away; opp = home; }
+        marketOdds = summary.odds ? (fav.homeAway === 'home' ? summary.odds.homeMoneyline : summary.odds.awayMoneyline) : null;
+      } else if (summary.odds) {
+        const hm = summary.odds.homeMoneyline;
+        const am = summary.odds.awayMoneyline;
+        if (hm != null && am != null) {
+          const hImp = impliedProbFromAmerican(hm);
+          const aImp = impliedProbFromAmerican(am);
+          if (hImp >= aImp) { favWinPct = hImp * 100; fav = home; opp = away; marketOdds = hm; }
+          else { favWinPct = aImp * 100; fav = away; opp = home; marketOdds = am; }
+          source = 'market';
+        }
+      }
+      if (favWinPct == null) return null;
+
+      const fairOdds = probabilityToAmerican(favWinPct / 100);
+      const edgePct = marketOdds != null ? favWinPct - impliedProbFromAmerican(marketOdds) * 100 : null;
+
+      return {
+        eventId: ev.id,
+        league: leagueId,
+        matchup: `${away.abbreviation} @ ${home.abbreviation}`,
+        favName: fav.name,
+        favAbbr: fav.abbreviation,
+        oppAbbr: opp.abbreviation,
+        favWinPct,
+        fairOdds,
+        marketOdds,
+        edgePct,
+        source,
+        date: ev.date,
+        statusDetail: ev.statusDetail,
+      };
+    }),
+  );
+
+  return picks.filter((p): p is ScoutPick => p != null).sort((a, b) => b.favWinPct - a.favWinPct);
+}
