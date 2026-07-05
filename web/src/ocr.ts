@@ -56,8 +56,10 @@ export const tesseractParser: BetSlipParser = {
     // Points"), which survive when OCR garbles the "N-Pick Flex Play" header.
     const statHits = (text.match(/\d+(?:\.\d+)?\s*(goals?|points?|assists?|rebounds?|shots?|saves?|pts|reb|ast|hits?|bases?|strikeouts?|receptions?|yards?)/gi) ?? []).length;
     if (/prize\s*picks|\b\d+[-\s]?pick\b|flex play|power play|pick.?em/i.test(text) || statHits >= 2) {
-      const pp = parsePrizePicks(text, lines, canvas);
-      if (pp.legs.some((l) => l.selection.trim())) return { drafts: [pp], text, confidence: 0.7 };
+      // Always keep the PrizePicks result — never fall through to the generic
+      // betslip parser, which would misread the "Team vs Team" matchup as a
+      // single moneyline pick instead of the player props.
+      return { drafts: [parsePrizePicks(text, lines, canvas)], text, confidence: 0.7 };
     }
 
     // A "My Bets" list holds several bets — split into blocks and parse each.
@@ -225,64 +227,36 @@ function parsePrizePicks(text: string, lines: OcrLine[], canvas: HTMLCanvasEleme
   // Header: payout ("to win $40") and pick count.
   const payout = firstMoney(text, /to\s*win\s*\$?\s*([\d,]+\.?\d*)/i) ?? firstMoney(text, /\$\s*([\d,]+\.?\d*)/);
   if (payout != null) draft.potentialPayout = payout;
-  const entryFee = firstMoney(text, /entry\D{0,6}\$?\s*([\d,]+\.?\d*)/i);
+  const entryFee =
+    firstMoney(text, /entry\D{0,6}\$?\s*([\d,]+\.?\d*)/i) ??
+    firstMoney(text, /\$\s*([\d,]+\.?\d*)\s*(?:entry|fee)/i);
   if (entryFee != null) draft.stake = entryFee;
 
   const bands = canvas ? greenBands(canvas) : [];
   const bandCenter = ([a, b]: [number, number]) => (a + b) / 2;
 
-  // Find each pick's player: the line directly above a subtitle line.
-  const subtitles = lines.filter((l) => PP_SUBTITLE.test(l.text) || /(•|·).+(•|·)/.test(l.text));
-  let players: { name: string; y0: number; y1: number }[] = [];
-  let hasGeometry = true;
-  for (const sub of subtitles) {
-    const above = lines
-      .filter((l) => l.y1 <= sub.y0 + 6 && sub.y0 - l.y1 < 120 && looksLikeName(l.text))
-      .sort((a, b) => b.y1 - a.y1)[0];
-    if (above) players.push({ name: cleanName(above.text), y0: above.y0, y1: sub.y1 });
-  }
+  // Each pick = one player + one stat projection. Prefer OCR geometry (needed to
+  // map green "passed" bars to the right pick); fall back to mining the raw text
+  // when there are no bounding boxes or geometry can't line the players up.
+  const geo = ppPicksFromGeometry(lines);
+  const txt = ppPicksFromText(text);
+  const useGeo = geo.length > 0 && geo.length >= txt.length;
+  const picks = useGeo ? geo : txt.map((p) => ({ ...p, y0: 0, y1: 0 }));
+  const hasGeometry = useGeo;
 
-  // Fallback: mine names straight from the raw text using the subtitle or stat
-  // line as the anchor (the player name sits just above it). Works even when OCR
-  // gives no bounding boxes — but then we can't map the green bars, so results
-  // stay unknown for review.
-  if (players.length === 0) {
-    hasGeometry = false;
-    const raw = text.split(/\n+/).map((s) => s.trim()).filter((s) => s.length > 1);
-    const seen = new Set<string>();
-    for (let i = 0; i < raw.length; i++) {
-      const anchor = PP_SUBTITLE.test(raw[i]!) || /(•|·)/.test(raw[i]!) || STAT_RE.test(raw[i]!) || /\b(over|under)\b/i.test(raw[i]!);
-      if (!anchor) continue;
-      for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
-        const name = cleanName(raw[j]!);
-        if (looksLikeName(raw[j]!) && !seen.has(name)) {
-          seen.add(name);
-          players.push({ name, y0: 0, y1: 0 });
-          break;
-        }
-      }
-    }
-  }
+  // Matchup ("England v Mexico") — attached to every pick as its event so the
+  // tracked bet links to the live game.
+  const mm = text.match(/([A-Z][A-Za-zÀ-ÿ.'-]+)\s+(?:v|vs\.?)\s+([A-Z][A-Za-zÀ-ÿ.'-]+)/);
+  const event = mm ? `${mm[1]!.trim()} v ${mm[2]!.trim()}` : '';
 
-  const legs: DraftLeg[] = players.map((p, i) => {
-    const next = players[i + 1];
+  const legs: DraftLeg[] = picks.map((p, i) => {
+    const next = picks[i + 1];
     const regionEnd = next ? next.y0 : (canvas?.height ?? Number.MAX_SAFE_INTEGER);
     // Passed if a green bar sits in this pick's vertical region (only meaningful
     // when we have real geometry from OCR bounding boxes).
     const passed = hasGeometry && bands.some((b) => bandCenter(b) >= p.y0 && bandCenter(b) < regionEnd);
-
-    // Stat line for this pick: a "0.5 Goals"-style token near the player row.
-    const statLine = lines.find(
-      (l) => l.y0 >= p.y0 - 20 && l.y0 < regionEnd && STAT_RE.test(l.text),
-    );
-    const m = statLine?.text.match(STAT_RE);
-    const line = m?.[1];
-    const stat = m?.[2];
-    const dir = statLine && /under|↓|\bU\b/i.test(statLine.text) ? 'Under' : 'Over';
-    const market = stat && line ? `${cap(stat)} • ${dir} ${line}` : '';
-
     const result: BetResult = passed ? 'win' : null;
-    return { selection: p.name, market, event: '', oddsAmerican: null, result };
+    return { selection: p.name, market: p.market, event, oddsAmerican: null, result };
   });
 
   draft.legs = legs.length
@@ -303,11 +277,86 @@ function parsePrizePicks(text: string, lines: OcrLine[], canvas: HTMLCanvasEleme
   return draft;
 }
 
+/** The player's subtitle row under their name, e.g. "England • Forward • #9".
+ *  Used to reject that row from ever being mistaken for the player's name. */
+const PP_POSITION = /attacker|midfield|defend|forward|goalkeeper|striker|winger|guard|pitcher|catcher|center|\bwr\b|\brb\b|\bqb\b|#\s?\d/i;
+
+/** A pick = one player and one stat market ("Shots • Over 1.5"). */
+interface PickBox {
+  name: string;
+  y0: number;
+  y1: number;
+  market: string;
+}
+
+/** Turn a "1.5 Shots" / "0.5 Goals" stat line into a market string. */
+function marketFrom(line: string | undefined): string {
+  if (!line) return '';
+  const m = line.match(STAT_RE);
+  if (!m) return '';
+  const dir = /\b(less|under)\b|↓/i.test(line) ? 'Under' : 'Over';
+  return `${cap(m[2]!)} • ${dir} ${m[1]}`;
+}
+
+/** Players from OCR bounding boxes: the name line sits directly above its
+ *  "Team • Position" subtitle; the stat line is the nearest projection below. */
+function ppPicksFromGeometry(lines: OcrLine[]): PickBox[] {
+  const subtitles = lines.filter((l) => PP_SUBTITLE.test(l.text) || /(•|·).+(•|·)/.test(l.text));
+  const picks: PickBox[] = [];
+  const seen = new Set<string>();
+  for (const sub of subtitles) {
+    const above = lines
+      .filter((l) => l.y1 <= sub.y0 + 6 && sub.y0 - l.y1 < 120 && looksLikeName(l.text))
+      .sort((a, b) => b.y1 - a.y1)[0];
+    if (!above) continue;
+    const name = cleanName(above.text);
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const stat = lines.find((l) => l.y0 >= above.y0 - 10 && l.y0 < sub.y1 + 170 && STAT_RE.test(l.text));
+    picks.push({ name, y0: above.y0, y1: sub.y1, market: marketFrom(stat?.text) });
+  }
+  return picks;
+}
+
+/** Players from raw text: anchor on each stat line, then take the player name
+ *  from the same line (before the number) or the nearest name line above it,
+ *  skipping "Team • Position" subtitle rows. Survives dropped bullets and names
+ *  sharing a line with their stat. */
+function ppPicksFromText(text: string): { name: string; market: string }[] {
+  const raw = text.split(/\n+/).map((s) => s.trim()).filter((s) => s.length > 1);
+  const picks: { name: string; market: string }[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < raw.length; i++) {
+    const sm = raw[i]!.match(STAT_RE);
+    if (!sm) continue;
+    const market = marketFrom(raw[i]!);
+    // Name on the same line, before the projection number?
+    let name = cleanName(raw[i]!.slice(0, raw[i]!.indexOf(sm[0])));
+    if (!looksLikeName(name)) {
+      name = '';
+      for (let j = i - 1; j >= Math.max(0, i - 4); j--) {
+        if (PP_POSITION.test(raw[j]!) || /(•|·)/.test(raw[j]!)) continue;
+        if (looksLikeName(raw[j]!)) {
+          name = cleanName(raw[j]!);
+          break;
+        }
+      }
+    }
+    if (name && !seen.has(name)) {
+      seen.add(name);
+      picks.push({ name, market });
+    }
+  }
+  return picks;
+}
+
 function looksLikeName(s: string): boolean {
   const t = s.trim();
   // Two-plus words, mostly letters (allow accents, apostrophes, hyphens).
   if (!/^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.'-]+(?:\s+[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.'-]+){1,3}$/.test(t)) return false;
   if (/\b(vs|final|world cup|flex|play|bonus|entry|pulse|details|to win)\b/i.test(t)) return false;
+  // A "Team • Position" subtitle (e.g. "England Forward") is never a name.
+  if (PP_POSITION.test(t)) return false;
   return true;
 }
 

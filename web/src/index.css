@@ -87,17 +87,19 @@ textarea {
 /* --- App shell ------------------------------------------------------------ */
 
 .app {
+  /* Fill the exact visual viewport with a FIXED shell pinned to all four edges.
+     iOS standalone (home-screen) PWAs miscompute 100vh/100dvh and leave dead
+     space below the content, so the nav floats up; `position: fixed; inset: 0`
+     always resolves to the full screen. The nav is a normal flex child (NOT
+     fixed itself), so it sits at the true bottom without the scroll/keyboard
+     drift that a fixed nav suffers. max-width + auto margins keep it centered. */
+  position: fixed;
+  inset: 0;
   max-width: 560px;
   margin: 0 auto;
-  /* Flex column pinned to the visible viewport height. The nav is the last
-     flex child, so it always sits at the true bottom — no position:fixed, which
-     drifts on iOS. `dvh` tracks the dynamic viewport (URL bar / home indicator). */
-  height: 100vh;
-  height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  position: relative;
   background:
     radial-gradient(120% 60% at 50% -10%, rgba(124, 92, 255, 0.14) 0%, transparent 55%),
     var(--bg);
