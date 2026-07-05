@@ -17,10 +17,7 @@ export function Stats({ bets }: { bets: Bet[] }) {
   return (
     <div className="screen">
       <div className="screen-header">
-        <div>
-          <div className="eyebrow">Performance</div>
-          <h1 className="screen-title">Stats</h1>
-        </div>
+        <h1 className="screen-title">Stats</h1>
       </div>
 
       <div className="tile-grid" style={{ marginTop: 4 }}>

@@ -14,6 +14,7 @@ import {
 import { LEAGUES } from '../espn';
 import { money } from '../stats';
 import { CloseIcon, TrashIcon } from './icons';
+import { OddsInput } from './OddsInput';
 
 function toDateInput(iso: string): string {
   return new Date(iso).toISOString().slice(0, 10);
@@ -70,7 +71,6 @@ export function BetForm({
 
         <div className="form-row">
           <div className="form-field">
-            <label>Book</label>
             <select value={draft.book} onChange={(e) => patch({ book: e.target.value as Book })}>
               {BOOK_OPTIONS.map((b) => (
                 <option key={b} value={b}>
@@ -80,7 +80,6 @@ export function BetForm({
             </select>
           </div>
           <div className="form-field">
-            <label>Type</label>
             <select value={draft.betType} onChange={(e) => patch({ betType: e.target.value as BetType })}>
               {BET_TYPES.map((t) => (
                 <option key={t} value={t}>
@@ -92,9 +91,8 @@ export function BetForm({
         </div>
 
         <div className="form-field">
-          <label>League (for live ESPN stats &amp; prediction)</label>
           <select value={draft.league ?? ''} onChange={(e) => patch({ league: e.target.value || null })}>
-            <option value="">— none —</option>
+            <option value="">League — optional</option>
             {LEAGUES.map((l) => (
               <option key={l.id} value={l.id}>
                 {l.label}
@@ -103,63 +101,49 @@ export function BetForm({
           </select>
         </div>
 
-        <div className="form-field">
-          <label>Status</label>
-          <div className="seg">
-            {(['open', 'settled'] as BetStatus[]).map((s) => (
-              <button key={s} className={draft.status === s ? 'on' : ''} onClick={() => patch({ status: s })}>
-                {s === 'open' ? 'Open' : 'Settled'}
-              </button>
-            ))}
-          </div>
+        <div className="seg">
+          {(['open', 'settled'] as BetStatus[]).map((s) => (
+            <button key={s} className={draft.status === s ? 'on' : ''} onClick={() => patch({ status: s })}>
+              {s === 'open' ? 'Open' : 'Settled'}
+            </button>
+          ))}
         </div>
 
         {draft.status === 'settled' && (
-          <div className="form-field">
-            <label>Result</label>
-            <div className="seg">
-              {RESULT_OPTIONS.map((r) => (
-                <button
-                  key={r}
-                  className={draft.result === r ? 'on' : ''}
-                  onClick={() => patch({ result: r as BetResult })}
-                >
-                  {r[0]!.toUpperCase() + r.slice(1)}
-                </button>
-              ))}
-            </div>
+          <div className="seg" style={{ marginTop: 12 }}>
+            {RESULT_OPTIONS.map((r) => (
+              <button
+                key={r}
+                className={draft.result === r ? 'on' : ''}
+                onClick={() => patch({ result: r as BetResult })}
+              >
+                {r[0]!.toUpperCase() + r.slice(1)}
+              </button>
+            ))}
           </div>
         )}
 
-        <div className="form-row">
+        <div className="form-row" style={{ marginTop: 12 }}>
           <div className="form-field">
-            <label>Stake ($)</label>
             <input
               type="number"
               inputMode="decimal"
+              placeholder="Stake $"
               value={draft.stake || ''}
               onChange={(e) => patch({ stake: Number(e.target.value) || 0 })}
             />
           </div>
           <div className="form-field">
-            <label>Odds (American)</label>
-            <input
-              type="number"
-              inputMode="numeric"
-              placeholder="-110"
-              value={draft.oddsAmerican ?? ''}
-              onChange={(e) => patch({ oddsAmerican: e.target.value === '' ? null : Number(e.target.value) })}
-            />
+            <OddsInput value={draft.oddsAmerican} onChange={(n) => patch({ oddsAmerican: n })} />
           </div>
         </div>
 
         <div className="form-row">
           <div className="form-field">
-            <label>Payout if win ($)</label>
             <input
               type="number"
               inputMode="decimal"
-              placeholder={String(projected)}
+              placeholder={`Payout $${projected}`}
               value={draft.potentialPayout ?? ''}
               onChange={(e) =>
                 patch({ potentialPayout: e.target.value === '' ? null : Number(e.target.value) })
@@ -167,7 +151,6 @@ export function BetForm({
             />
           </div>
           <div className="form-field">
-            <label>Date placed</label>
             <input
               type="date"
               value={toDateInput(draft.placedAt)}
@@ -176,25 +159,25 @@ export function BetForm({
           </div>
         </div>
 
-        <div className="section-head" style={{ margin: '10px 2px 10px' }}>
+        <div className="section-head" style={{ margin: '8px 2px 10px' }}>
           <h2 style={{ fontSize: 15 }}>Legs</h2>
           <span style={{ color: 'var(--muted)', fontSize: 12 }}>To win {money(projected)}</span>
         </div>
 
         {draft.legs.map((leg, i) => (
           <div className="leg-edit" key={i}>
-            <div className="top">
-              <span>Leg {i + 1}</span>
-              {draft.legs.length > 1 && (
+            {draft.legs.length > 1 && (
+              <div className="top">
+                <span>{i + 1}</span>
                 <button className="icon-btn" style={{ width: 30, height: 30 }} onClick={() => removeLeg(i)}>
                   <TrashIcon size={16} />
                 </button>
-              )}
-            </div>
+              </div>
+            )}
             <div className="form-field" style={{ marginBottom: 8 }}>
               <input
                 className="mini"
-                placeholder="Selection — e.g. Celtics -6.5"
+                placeholder="Selection"
                 value={leg.selection}
                 onChange={(e) => setLeg(i, { selection: e.target.value })}
               />
@@ -203,20 +186,15 @@ export function BetForm({
               <div className="form-field" style={{ marginBottom: 0 }}>
                 <input
                   className="mini"
-                  placeholder="Event — Celtics vs Knicks"
+                  placeholder="Matchup"
                   value={leg.event}
                   onChange={(e) => setLeg(i, { event: e.target.value })}
                 />
               </div>
-              <div className="form-field" style={{ marginBottom: 0, maxWidth: 100 }}>
-                <input
-                  className="mini"
-                  type="number"
-                  placeholder="Odds"
-                  value={leg.oddsAmerican ?? ''}
-                  onChange={(e) =>
-                    setLeg(i, { oddsAmerican: e.target.value === '' ? null : Number(e.target.value) })
-                  }
+              <div className="form-field" style={{ marginBottom: 0, maxWidth: 132 }}>
+                <OddsInput
+                  value={leg.oddsAmerican}
+                  onChange={(n) => setLeg(i, { oddsAmerican: n })}
                 />
               </div>
             </div>
@@ -229,7 +207,7 @@ export function BetForm({
 
         {ocrText && (
           <details className="note" style={{ marginTop: 14 }}>
-            <summary style={{ cursor: 'pointer', fontWeight: 700 }}>What the scan read</summary>
+            <summary style={{ cursor: 'pointer', fontWeight: 700 }}>Scanned text</summary>
             <pre style={{ whiteSpace: 'pre-wrap', margin: '8px 0 0', fontSize: 12 }}>{ocrText}</pre>
           </details>
         )}
@@ -241,7 +219,7 @@ export function BetForm({
           whileTap={{ scale: 0.97 }}
           onClick={() => onSave(draftToBet(draft))}
         >
-          Save bet
+          Save
         </motion.button>
       </div>
     </motion.div>

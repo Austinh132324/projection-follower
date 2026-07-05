@@ -694,6 +694,36 @@ textarea {
 .form-row { display: flex; gap: 12px; }
 .form-row > * { flex: 1; }
 
+/* Odds input: sign toggle + magnitude field */
+.odds-input {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.odds-input input {
+  flex: 1;
+  min-width: 0;
+}
+.sign-seg {
+  display: flex;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.sign-seg button {
+  width: 40px;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--muted);
+}
+.sign-seg button.on {
+  background: var(--accent-grad);
+  color: #fff;
+}
+
 .seg {
   display: flex;
   gap: 6px;
@@ -846,6 +876,120 @@ textarea {
   animation: pulse 1.4s ease-in-out infinite;
 }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* --- Kickoff card (future games) ------------------------------------------ */
+
+.kickoff {
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(124, 92, 255, 0.2), transparent 60%),
+    linear-gradient(160deg, var(--surface-2), var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 20px 18px;
+  margin-bottom: 14px;
+}
+.ko-matchup {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.ko-team { flex: 1; text-align: center; }
+.ko-abbr { font-size: 26px; font-weight: 850; letter-spacing: -0.02em; }
+.ko-rec { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.ko-vs { color: var(--faint); font-weight: 800; font-size: 13px; letter-spacing: 0.08em; }
+.ko-when { text-align: center; color: var(--muted); font-size: 13px; margin: 14px 0 12px; }
+
+.count {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.count .box {
+  flex: 1;
+  max-width: 74px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 0;
+  text-align: center;
+}
+.count .num {
+  font-size: 26px;
+  font-weight: 850;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.count .lab {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  margin-top: 2px;
+}
+
+.split { margin-top: 16px; }
+.split-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.split-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.split-away { background: var(--faint); }
+.split-home { background: var(--accent-grad); }
+
+/* --- Win-probability chart ------------------------------------------------- */
+
+.wp-chart {
+  width: 100%;
+  height: 64px;
+  display: block;
+  margin: 6px 0 2px;
+}
+.wp-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--faint);
+}
+
+/* --- Linescore table ------------------------------------------------------- */
+
+.linescore {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.linescore th,
+.linescore td {
+  text-align: center;
+  padding: 6px 8px;
+  font-size: 14px;
+  min-width: 26px;
+}
+.linescore thead th {
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--border);
+}
+.linescore td.team,
+.linescore th:first-child {
+  text-align: left;
+  font-weight: 800;
+}
+.linescore .total { font-weight: 850; color: var(--text); }
+.linescore thead .total { color: var(--muted); }
 
 .ocr-status {
   text-align: center;

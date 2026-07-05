@@ -56,11 +56,12 @@ export function PhotoImport({ onSave, onClose }: { onSave: (bet: Bet) => void; o
           </button>
         </div>
 
+        {/* No `capture` attribute → iOS offers Photo Library / Take Photo /
+            Browse, so you can pick a screenshot from your camera roll. */}
         <input
           ref={inputRef}
           type="file"
           accept="image/*"
-          capture="environment"
           style={{ display: 'none' }}
           onChange={(e) => {
             const f = e.target.files?.[0];
@@ -74,9 +75,8 @@ export function PhotoImport({ onSave, onClose }: { onSave: (bet: Bet) => void; o
         {phase === 'pick' && (
           <div className="ocr-status">
             <div className="spinner" />
-            <p className="screen-sub">Opening your photos…</p>
             <button className="btn secondary" style={{ marginTop: 16 }} onClick={() => inputRef.current?.click()}>
-              Choose a photo
+              Choose from camera roll
             </button>
           </div>
         )}
@@ -110,8 +110,8 @@ export function PhotoImport({ onSave, onClose }: { onSave: (bet: Bet) => void; o
         )}
 
         <div className="note" style={{ marginTop: 20 }}>
-          On-device OCR reads clear bet-slip screenshots best. It pre-fills the form — you confirm
-          before saving. Nothing leaves your device.
+          Reads a bet-slip screenshot on your device and pre-fills the form to confirm. Works best
+          with a full, clear DraftKings / FanDuel / PrizePicks screenshot.
         </div>
       </div>
     </motion.div>

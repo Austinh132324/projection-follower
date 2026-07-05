@@ -86,25 +86,37 @@ export function draftFromText(text: string): BetDraft {
   ];
   for (const [re, book] of bookMap) if (re.test(lower)) { draft.book = book; break; }
 
-  // Bet type
-  if (/prize\s*picks|entry|lineup|pick.?em/.test(lower)) draft.betType = 'dfs_entry';
-  else if (/parlay|leg\s*\d|\d+\s*leg/.test(lower)) draft.betType = 'parlay';
-  else if (/\bover\b|\bunder\b|player|props?/.test(lower)) draft.betType = 'prop';
+  // Bet type. PrizePicks entries read "N-Pick" / "Power"/"Flex"; DK/FD parlays
+  // read "N Leg Parlay" / "Parlay".
+  if (/prize\s*picks|pick.?em|\d+[- ]?pick|\bentry\b|\bflex\b|\bpower play\b|lineup/.test(lower)) {
+    draft.betType = 'dfs_entry';
+  } else if (/parlay|\d+\s*leg|leg\s*\d/.test(lower)) {
+    draft.betType = 'parlay';
+  } else if (/\bover\b|\bunder\b|player|props?/.test(lower)) {
+    draft.betType = 'prop';
+  }
 
-  // Status / result
-  if (/\bopen\b|pending|to\s*win|potential/.test(lower)) draft.status = 'open';
-  if (/\bwon\b|\bwin\b|cash(ed)?|paid/.test(lower)) { draft.status = 'settled'; draft.result = 'win'; }
-  if (/\blost\b|\bloss\b/.test(lower)) { draft.status = 'settled'; draft.result = 'loss'; }
+  // Status / result. "Open bet" screenshots show cash-out / to-win, no result.
+  if (/\bopen\b|pending|cash\s*out|to\s*win|to\s*pay|potential/.test(lower)) draft.status = 'open';
+  if (/\bwon\b|\bwin\b(?!\s*\$)|cash(ed)?\b|paid|winner/.test(lower)) { draft.status = 'settled'; draft.result = 'win'; }
+  if (/\blost\b|\bloss\b|\blose\b/.test(lower)) { draft.status = 'settled'; draft.result = 'loss'; }
   if (/\bpush\b|void|refund/.test(lower)) { draft.status = 'settled'; draft.result = 'push'; }
 
   // League
   const leagueHit = LEAGUES.find((l) => new RegExp(`\\b${l.id}\\b`, 'i').test(lower));
   if (leagueHit) draft.league = leagueHit.id;
 
-  // Money: "Wager $25", "Stake 25.00", "$25 to win $141"
-  const stake = matchMoney(text, /(?:wager|stake|risk|bet|entry\s*fee)\D{0,8}\$?\s*([\d,]+\.?\d*)/i);
+  // Money. DK/FD: "Wager $25" + "To Win $141" / "Total Payout". PrizePicks:
+  // "Entry $5" + "To Win $50" / "Payout".
+  const stake = matchMoney(
+    text,
+    /(?:total\s*wager|wager|stake|risk|bet\s*amount|entry(?:\s*fee)?)\D{0,10}\$?\s*([\d,]+\.?\d*)/i,
+  );
   if (stake != null) draft.stake = stake;
-  const payout = matchMoney(text, /(?:to\s*win|payout|to\s*pay|potential|returns?)\D{0,8}\$?\s*([\d,]+\.?\d*)/i);
+  const payout = matchMoney(
+    text,
+    /(?:to\s*win|to\s*pay|total\s*payout|payout|potential(?:\s*(?:payout|winnings))?|returns?|prize|winnings)\D{0,10}\$?\s*([\d,]+\.?\d*)/i,
+  );
   if (payout != null) draft.potentialPayout = payout;
   // Fallback: first two dollar amounts → stake, payout.
   if (draft.stake === 0) {
