@@ -6,6 +6,11 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   base: './',
+  // A human-readable build stamp shown in Settings, so you can confirm an update
+  // actually took effect after "Check for update".
+  define: {
+    __BUILD_ID__: JSON.stringify(new Date().toISOString().slice(0, 16).replace('T', ' ')),
+  },
   server: {
     // In local dev with the real backend running, proxy /api to it so the app
     // hits your Express server. (Ignored on the static Pages build.)
