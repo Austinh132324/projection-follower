@@ -1,34 +1,28 @@
-# Deploys the dashboard to GitHub Pages — the static, on-device build (no
-# backend), so it runs anywhere including a phone browser. Runs ONLY when you
-# start it by hand from the Actions tab ("Run workflow") — never automatically.
-# VITE_USE_MOCK=true bakes in the browser-stored data mode.
+# Deploys the dashboard to GitHub Pages by publishing the built static site to a
+# `gh-pages` branch. This is the classic branch-based method: the deploy step is
+# just a git push, which sidesteps the flaky Actions "deploy-pages" API that was
+# failing intermittently with "Deployment failed, try again later".
 #
-# One-time setup (only you can do this): repo Settings → Pages → "Build and
-# deployment" → Source = "GitHub Actions". A workflow_dispatch workflow is only
-# runnable once it exists on the default branch (main), so merge this first.
+# Runs ONLY when you start it by hand from the Actions tab ("Run workflow").
+#
+# ONE-TIME SETUP (only you can do this, after the first run creates the branch):
+#   repo Settings → Pages → "Build and deployment" → Source = "Deploy from a
+#   branch" → Branch = "gh-pages" / "(root)" → Save.
 name: Deploy dashboard to Pages
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
-# Allow one concurrent deployment. Do NOT cancel an in-progress run — a Pages
-# deployment must finish; cancelling it mid-flight fails with "Deployment
-# failed, try again later" (GitHub's own Pages workflow uses false here).
 concurrency:
   group: pages
   cancel-in-progress: false
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web
     steps:
       - uses: actions/checkout@v4
 
@@ -38,23 +32,23 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - run: npm ci
-
       - name: Build (static, mock data)
+        working-directory: web
         env:
           VITE_USE_MOCK: 'true'
-        run: npm run build
+        run: |
+          npm ci
+          npm run build
+          touch dist/.nojekyll
 
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: web/dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Publish to gh-pages branch
+        run: |
+          cd web/dist
+          git init -q
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "Deploy ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:gh-pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
