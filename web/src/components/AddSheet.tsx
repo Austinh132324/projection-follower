@@ -1,15 +1,34 @@
+import { useRef } from 'react';
 import { motion } from 'framer-motion';
-import { CameraIcon, EditIcon } from './icons';
+import { ImagesIcon, CameraIcon, EditIcon } from './icons';
 
+/**
+ * The "add a bet" chooser. Photo pickers are opened from a *direct tap* on these
+ * buttons (not programmatically on mount) — iOS Safari only opens a file input
+ * within a real user gesture, which is what makes "Photo Library" actually work.
+ *
+ * - Photo Library: `accept="image/*"` with no `capture` → iOS shows Photo
+ *   Library / Choose File (Files), so you can grab a screenshot from anywhere.
+ * - Take a photo: `capture="environment"` → opens the camera.
+ */
 export function AddSheet({
   onClose,
   onManual,
-  onPhoto,
+  onPhotoFile,
 }: {
   onClose: () => void;
   onManual: () => void;
-  onPhoto: () => void;
+  onPhotoFile: (file: File) => void;
 }) {
+  const libraryRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+
+  const pick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file later
+    if (file) onPhotoFile(file);
+  };
+
   return (
     <motion.div
       className="backdrop"
@@ -28,15 +47,28 @@ export function AddSheet({
       >
         <div className="sheet-handle" />
         <h3>Add a bet</h3>
-        <p className="sub">Log it yourself, or snap the slip and let it read the details.</p>
+        <p className="sub">Import a slip screenshot, or enter it yourself.</p>
 
-        <motion.button className="choice" onClick={onPhoto} whileTap={{ scale: 0.98 }}>
+        <input ref={libraryRef} type="file" accept="image/*" hidden onChange={pick} />
+        <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={pick} />
+
+        <motion.button className="choice" onClick={() => libraryRef.current?.click()} whileTap={{ scale: 0.98 }}>
+          <span className="ic">
+            <ImagesIcon />
+          </span>
+          <span>
+            <div className="t">Photo Library</div>
+            <div className="d">Pick a screenshot from Photos or Files</div>
+          </span>
+        </motion.button>
+
+        <motion.button className="choice" onClick={() => cameraRef.current?.click()} whileTap={{ scale: 0.98 }}>
           <span className="ic">
             <CameraIcon />
           </span>
           <span>
-            <div className="t">Scan a photo</div>
-            <div className="d">Read a bet slip screenshot with on-device OCR</div>
+            <div className="t">Take a photo</div>
+            <div className="d">Snap the bet slip now</div>
           </span>
         </motion.button>
 

@@ -90,6 +90,18 @@ export function PlusIcon({ size = 26 }: { size?: number }) {
   );
 }
 
+export function ImagesIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" width={size} height={size}>
+      <rect x="7" y="3" width="14" height="14" rx="2.5" />
+      <circle cx="11" cy="7.5" r="1.4" />
+      <path d="M21 12.5l-4-3.5-6 5.5" />
+      <path d="M17 21H5a2 2 0 0 1-2-2V8" />
+    </svg>
+  );
+}
+
 export function CameraIcon({ size = 22 }: { size?: number }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
