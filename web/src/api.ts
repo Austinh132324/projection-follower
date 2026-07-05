@@ -14,11 +14,19 @@ export const USE_LOCAL = (import.meta.env.VITE_USE_MOCK ?? 'true') !== 'false';
 
 const LS_KEY = 'pf-bets';
 
+// Old builds seeded demo bets (ids like dk-1001 / fd-2001 / pp-3001) into
+// storage. Real bets you add get "m-…" ids, so we can safely purge any leftover
+// seed rows once, on load.
+const DEMO_SEED = /^(dk|fd|pp)-\d/;
+
 function readLocal(): Bet[] {
   const raw = localStorage.getItem(LS_KEY);
   if (!raw) return [];
   try {
-    return JSON.parse(raw) as Bet[];
+    const bets = JSON.parse(raw) as Bet[];
+    const cleaned = bets.filter((b) => !DEMO_SEED.test(b.betId));
+    if (cleaned.length !== bets.length) writeLocal(cleaned);
+    return cleaned;
   } catch {
     return [];
   }

@@ -21,7 +21,7 @@ type Overlay =
   | { kind: 'none' }
   | { kind: 'add' }
   | { kind: 'manual' }
-  | { kind: 'photo' }
+  | { kind: 'photo'; file: File }
   | { kind: 'detail'; bet: Bet };
 
 export default function App() {
@@ -97,13 +97,15 @@ function Shell() {
             key="add"
             onClose={close}
             onManual={() => setOverlay({ kind: 'manual' })}
-            onPhoto={() => setOverlay({ kind: 'photo' })}
+            onPhotoFile={(file) => setOverlay({ kind: 'photo', file })}
           />
         )}
         {overlay.kind === 'manual' && (
           <BetForm key="manual" initial={emptyDraft('manual')} title="New bet" onSave={handleSave} onClose={close} />
         )}
-        {overlay.kind === 'photo' && <PhotoImport key="photo" onSave={handleSave} onClose={close} />}
+        {overlay.kind === 'photo' && (
+          <PhotoImport key="photo" file={overlay.file} onSave={handleSave} onClose={close} />
+        )}
         {overlay.kind === 'detail' && (
           <BetDetail key="detail" bet={overlay.bet} onClose={close} onDelete={handleDelete} />
         )}
