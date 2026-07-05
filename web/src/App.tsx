@@ -26,11 +26,9 @@ type Overlay =
 
 export default function App() {
   const { isAuthed } = useAuth();
-  return (
-    <AnimatePresence mode="wait">
-      {isAuthed ? <Shell key="shell" /> : <Login key="login" />}
-    </AnimatePresence>
-  );
+  // Plain conditional render (no AnimatePresence here): the auth components
+  // aren't motion elements, and mode="wait" would stall the logout swap.
+  return isAuthed ? <Shell /> : <Login />;
 }
 
 function Shell() {
