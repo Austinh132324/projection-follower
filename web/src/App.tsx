@@ -10,17 +10,18 @@ import { PhotoImport } from './components/PhotoImport';
 import { BetDetail } from './components/BetDetail';
 import { Home } from './pages/Home';
 import { Bets } from './pages/Bets';
+import { Scout } from './pages/Scout';
 import { Stats } from './pages/Stats';
 import { Settings } from './pages/Settings';
 import { loadBets, saveBet, removeBet } from './api';
-import { emptyDraft } from './betDraft';
+import { emptyDraft, type BetDraft } from './betDraft';
 import type { Bet, Filter } from './types';
 import { EMPTY_FILTER } from './types';
 
 type Overlay =
   | { kind: 'none' }
   | { kind: 'add' }
-  | { kind: 'manual' }
+  | { kind: 'manual'; draft?: BetDraft }
   | { kind: 'photo'; files: File[] }
   | { kind: 'detail'; bet: Bet };
 
@@ -91,6 +92,7 @@ function Shell() {
                 onNav={setTab}
                 onOpen={openDetail}
                 onAdd={() => setOverlay({ kind: 'add' })}
+                onTrack={(draft) => setOverlay({ kind: 'manual', draft })}
               />
             )}
           </motion.div>
@@ -109,7 +111,13 @@ function Shell() {
           />
         )}
         {overlay.kind === 'manual' && (
-          <BetForm key="manual" initial={emptyDraft('manual')} title="New bet" onSave={handleSave} onClose={close} />
+          <BetForm
+            key="manual"
+            initial={overlay.draft ?? emptyDraft('manual')}
+            title={overlay.draft ? 'Track bet' : 'New bet'}
+            onSave={handleSave}
+            onClose={close}
+          />
         )}
         {overlay.kind === 'photo' && (
           <PhotoImport key="photo" files={overlay.files} onSave={persist} onClose={close} />
@@ -130,6 +138,7 @@ function Page({
   onNav,
   onOpen,
   onAdd,
+  onTrack,
 }: {
   tab: Tab;
   bets: Bet[];
@@ -138,12 +147,15 @@ function Page({
   onNav: (t: Tab) => void;
   onOpen: (b: Bet) => void;
   onAdd: () => void;
+  onTrack: (draft: BetDraft) => void;
 }) {
   switch (tab) {
     case 'home':
       return <Home bets={bets} onSeeAll={onNav} onOpen={onOpen} onAdd={onAdd} />;
     case 'bets':
       return <Bets bets={bets} filter={filter} setFilter={setFilter} onOpen={onOpen} />;
+    case 'scout':
+      return <Scout onTrack={onTrack} />;
     case 'stats':
       return <Stats bets={bets} />;
     case 'settings':

@@ -37,10 +37,20 @@ html,
 body,
 #root {
   height: 100%;
-  /* Only vertical scrolling on mobile — never sideways. */
   width: 100%;
   max-width: 100%;
-  overflow-x: hidden;
+}
+
+/* The page itself never scrolls — the app is a fixed-height shell and only its
+   inner content area (.app-scroll) scrolls. This guarantees the bottom nav is
+   always pinned to the visible bottom, with no page scroll to push it off. */
+html,
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+#root {
+  overflow: hidden;
 }
 
 body {

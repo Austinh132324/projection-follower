@@ -35,6 +35,17 @@ export function ChartIcon({ active }: P) {
   );
 }
 
+export function ScoutIcon({ active }: P) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke(active)}
+      strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="8.2" />
+      <circle cx="12" cy="12" r="3.4" />
+      <path d="M12 1.6v3M12 19.4v3M22.4 12h-3M4.6 12h-3" />
+    </svg>
+  );
+}
+
 export function GearIcon({ active }: P) {
   // Heroicons "cog-6-tooth" (outline) — clean, symmetric teeth. Its geometry is
   // tuned for a ~1.5 stroke, so we scale down slightly from the other nav icons.
