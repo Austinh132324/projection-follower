@@ -5,98 +5,119 @@ import { tesseractParser } from '../ocr';
 import type { BetDraft } from '../betDraft';
 import { BetForm } from './BetForm';
 import { CloseIcon } from './icons';
+import { ScanStatus, type ScanState } from './ScanStatus';
 
-type Phase = 'reading' | 'review' | 'error';
+interface Item {
+  url: string;
+  state: ScanState;
+  count: number;
+}
 
 /**
- * Runs OCR on a photo the user already picked (in AddSheet) and hands the
- * pre-filled draft to the form. The file is passed in — picking happens upstream
- * from a real tap so it works on iOS.
+ * Batch photo import: scans one or more picked images (each may contain several
+ * bets, e.g. a "My Bets" list), showing an animated status per image — a
+ * gradient spinner that resolves to a green check (bets found) or red X — then
+ * steps through every found bet for you to confirm.
  */
-export function PhotoImport({ file, onSave, onClose }: { file: File; onSave: (bet: Bet) => void; onClose: () => void }) {
-  const [phase, setPhase] = useState<Phase>('reading');
-  const [progress, setProgress] = useState(0);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [draft, setDraft] = useState<BetDraft | null>(null);
-  const [ocrText, setOcrText] = useState('');
-  const [error, setError] = useState('');
-  const retryRef = useRef<HTMLInputElement>(null);
-
-  const run = async (f: File) => {
-    setPreview(URL.createObjectURL(f));
-    setPhase('reading');
-    setProgress(0);
-    try {
-      const result = await tesseractParser.parse(f, setProgress);
-      setDraft(result.draft);
-      setOcrText(result.text);
-      setPhase('review');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not read the photo');
-      setPhase('error');
-    }
-  };
+export function PhotoImport({
+  files,
+  onSave,
+  onClose,
+}: {
+  files: File[];
+  onSave: (bet: Bet) => void;
+  onClose: () => void;
+}) {
+  const [items, setItems] = useState<Item[]>(() =>
+    files.map((f) => ({ url: URL.createObjectURL(f), state: 'pending', count: 0 })),
+  );
+  const [phase, setPhase] = useState<'scanning' | 'review' | 'empty'>('scanning');
+  const [drafts, setDrafts] = useState<BetDraft[]>([]);
+  const [reviewIdx, setReviewIdx] = useState(0);
+  const started = useRef(false);
 
   useEffect(() => {
-    run(file);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [file]);
+    if (started.current) return;
+    started.current = true;
+    (async () => {
+      const collected: BetDraft[] = [];
+      for (let i = 0; i < files.length; i++) {
+        setItems((s) => s.map((it, idx) => (idx === i ? { ...it, state: 'scanning' } : it)));
+        try {
+          const res = await tesseractParser.parse(files[i]!);
+          const found = res.drafts.filter((d) => d.legs.some((l) => l.selection.trim()));
+          collected.push(...found);
+          setItems((s) =>
+            s.map((it, idx) => (idx === i ? { ...it, state: found.length ? 'ok' : 'fail', count: found.length } : it)),
+          );
+        } catch {
+          setItems((s) => s.map((it, idx) => (idx === i ? { ...it, state: 'fail' } : it)));
+        }
+      }
+      setDrafts(collected);
+      await new Promise((r) => setTimeout(r, 650)); // let the last check animate
+      setPhase(collected.length ? 'review' : 'empty');
+    })();
+  }, [files]);
 
-  if (phase === 'review' && draft) {
-    return <BetForm initial={draft} title="Review scanned bet" onSave={onSave} onClose={onClose} ocrText={ocrText} />;
+  const next = () => {
+    if (reviewIdx + 1 < drafts.length) setReviewIdx((i) => i + 1);
+    else onClose();
+  };
+
+  if (phase === 'review' && drafts[reviewIdx]) {
+    return (
+      <BetForm
+        key={reviewIdx}
+        initial={drafts[reviewIdx]!}
+        title="Review bet"
+        stepLabel={drafts.length > 1 ? `Bet ${reviewIdx + 1} of ${drafts.length}` : undefined}
+        onSave={(bet) => {
+          onSave(bet);
+          next();
+        }}
+        onSkip={drafts.length > 1 ? next : undefined}
+        onClose={onClose}
+        ocrText={drafts[reviewIdx]!.rawText as string | undefined}
+      />
+    );
   }
+
+  const total = items.reduce((n, it) => n + it.count, 0);
 
   return (
     <motion.div className="modal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
       <div className="modal-inner">
         <div className="modal-head">
-          <h2>Scan a bet</h2>
+          <h2>{phase === 'scanning' ? 'Scanning…' : 'Scan complete'}</h2>
           <button className="icon-btn" onClick={onClose} aria-label="Close">
             <CloseIcon />
           </button>
         </div>
 
-        {preview && <img className="ocr-preview" src={preview} alt="bet slip" />}
+        {items.map((it, i) => (
+          <div className="scan-item" key={i}>
+            <img className="scan-thumb" src={it.url} alt={`photo ${i + 1}`} />
+            <div className="meta">
+              <div className="t">Photo {i + 1}</div>
+              <div className="d">
+                {it.state === 'pending' && 'Waiting…'}
+                {it.state === 'scanning' && 'Reading on device…'}
+                {it.state === 'ok' && `${it.count} bet${it.count === 1 ? '' : 's'} found`}
+                {it.state === 'fail' && "Couldn't read a bet"}
+              </div>
+            </div>
+            <ScanStatus state={it.state} />
+          </div>
+        ))}
 
-        {phase === 'reading' && (
-          <div className="ocr-status">
-            <div className="gauge" style={{ justifyContent: 'center' }}>
-              <span className="big">{Math.round(progress * 100)}%</span>
-            </div>
-            <div className="meter" style={{ maxWidth: 260, margin: '0 auto' }}>
-              <motion.div className="meter-fill" animate={{ width: `${Math.round(progress * 100)}%` }} transition={{ ease: 'linear' }} />
-            </div>
-            <p className="screen-sub" style={{ marginTop: 14 }}>Reading the slip on your device…</p>
+        {phase === 'empty' && (
+          <div className="note" style={{ marginTop: 16 }}>
+            No bets could be read. Try a fuller, clearer screenshot — or add it manually.
           </div>
         )}
 
-        {phase === 'error' && (
-          <div className="ocr-status">
-            <div className="empty" style={{ padding: 20 }}>
-              <div className="big">📷</div>
-              {error}
-            </div>
-            <input
-              ref={retryRef}
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                e.target.value = '';
-                if (f) run(f);
-              }}
-            />
-            <button className="btn secondary" onClick={() => retryRef.current?.click()}>
-              Choose another
-            </button>
-          </div>
-        )}
-
-        <div className="note" style={{ marginTop: 20 }}>
-          Reads a bet-slip screenshot on your device and pre-fills the form to confirm. Works best
-          with a full, clear DraftKings / FanDuel / PrizePicks screenshot.
-        </div>
+        {phase === 'review' && total === 0 && <div className="spinner" />}
       </div>
     </motion.div>
   );

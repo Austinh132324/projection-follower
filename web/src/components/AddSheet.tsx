@@ -14,19 +14,19 @@ import { ImagesIcon, CameraIcon, EditIcon } from './icons';
 export function AddSheet({
   onClose,
   onManual,
-  onPhotoFile,
+  onPhotoFiles,
 }: {
   onClose: () => void;
   onManual: () => void;
-  onPhotoFile: (file: File) => void;
+  onPhotoFiles: (files: File[]) => void;
 }) {
   const libraryRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
   const pick = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files ?? []);
     e.target.value = ''; // allow re-selecting the same file later
-    if (file) onPhotoFile(file);
+    if (files.length) onPhotoFiles(files);
   };
 
   return (
@@ -49,7 +49,7 @@ export function AddSheet({
         <h3>Add a bet</h3>
         <p className="sub">Import a slip screenshot, or enter it yourself.</p>
 
-        <input ref={libraryRef} type="file" accept="image/*" hidden onChange={pick} />
+        <input ref={libraryRef} type="file" accept="image/*" multiple hidden onChange={pick} />
         <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={pick} />
 
         <motion.button className="choice" onClick={() => libraryRef.current?.click()} whileTap={{ scale: 0.98 }}>
@@ -58,7 +58,7 @@ export function AddSheet({
           </span>
           <span>
             <div className="t">Photo Library</div>
-            <div className="d">Pick a screenshot from Photos or Files</div>
+            <div className="d">Pick one or more screenshots from Photos or Files</div>
           </span>
         </motion.button>
 

@@ -14,7 +14,8 @@ import type { Book, BetResult } from './types';
 import { detectLeague } from './espn';
 
 export interface ParseResult {
-  draft: BetDraft;
+  /** One or more bets found in the image (a "My Bets" list can hold several). */
+  drafts: BetDraft[];
   text: string;
   confidence: number;
 }
@@ -52,17 +53,30 @@ export const tesseractParser: BetSlipParser = {
     // PrizePicks entries look nothing like a straight betslip — route them to a
     // dedicated parser that pulls players and reads passed/failed from colour.
     if (/prize\s*picks|\b\d+[-\s]?pick\b|flex play|power play|pick.?em/i.test(text)) {
-      return { draft: parsePrizePicks(text, lines, canvas), text, confidence: 0.7 };
+      return { drafts: [parsePrizePicks(text, lines, canvas)], text, confidence: 0.7 };
     }
-    return { draft: draftFromText(text), text, confidence: scoreConfidence(text) };
+
+    // A "My Bets" list holds several bets — split into blocks and parse each.
+    // A real bet has a selection AND odds (this rejects nav bars / balances).
+    const drafts = splitIntoBets(text)
+      .map((block) => draftFromText(block))
+      .filter((d) => d.legs.some((l) => l.selection.trim()) && d.oddsAmerican != null);
+    return {
+      drafts: drafts.length ? drafts : [draftFromText(text)],
+      text,
+      confidence: scoreConfidence(text),
+    };
   },
 };
 
-// --- Remote vision-LLM parser (opt-in) --------------------------------------
+// --- Remote vision-AI parser (opt-in) ---------------------------------------
+// Hook point for a vision model — a hosted LLM or your own LOCAL AI. Point
+// /api/parse-slip at it (or set a base URL) and it should return
+// { drafts: Partial<BetDraft>[], text? }. It supersedes the heuristics entirely.
 
 export const remoteParser: BetSlipParser = {
   id: 'remote',
-  label: 'AI vision (server)',
+  label: 'AI vision',
   async parse(file) {
     const body = new FormData();
     body.append('image', file);
@@ -71,11 +85,12 @@ export const remoteParser: BetSlipParser = {
       const msg = await res.json().catch(() => ({ error: res.statusText }));
       throw new Error(msg.error ?? 'Server parsing failed');
     }
-    const parsed = (await res.json()) as { draft: Partial<BetDraft>; text?: string };
+    const parsed = (await res.json()) as { drafts?: Partial<BetDraft>[]; draft?: Partial<BetDraft>; text?: string };
+    const list = parsed.drafts ?? (parsed.draft ? [parsed.draft] : []);
     return {
-      draft: { ...emptyDraft('photo'), ...parsed.draft, source: 'photo' },
+      drafts: list.map((d) => ({ ...emptyDraft('photo'), ...d, source: 'photo' as const })),
       text: parsed.text ?? '',
-      confidence: 0.9,
+      confidence: 0.95,
     };
   },
 };
@@ -304,52 +319,58 @@ export function draftFromText(text: string): BetDraft {
     draft.betType = 'prop';
   }
 
-  if (/\bopen\b|pending|cash\s*out|to\s*win|to\s*pay|potential/.test(lower)) draft.status = 'open';
-  if (/\bwon\b|\bwin\b(?!\s*\$)|cash(ed)?\b|paid|winner/.test(lower) && !/cash\s*out/.test(lower)) { draft.status = 'settled'; draft.result = 'win'; }
-  if (/\blost\b|\bloss\b|\blose\b/.test(lower)) { draft.status = 'settled'; draft.result = 'loss'; }
-  if (/\bpush\b|void|refund/.test(lower)) { draft.status = 'settled'; draft.result = 'push'; }
-
   draft.league = detectLeague(text);
 
   // Money. Default to the first two dollar amounts in reading order (wager,
-  // payout) — robust for FanDuel, which prints the amounts ABOVE their labels.
+  // then payout/return) — robust for FanDuel, which prints the amounts ABOVE
+  // their labels.
   const dollars = [...text.matchAll(/\$\s*([\d,]+\.?\d*)/g)].map((mm) => Number(mm[1]!.replace(/,/g, '')));
   if (dollars[0] != null) draft.stake = dollars[0];
   if (dollars[1] != null) draft.potentialPayout = dollars[1];
-  // Refine only when a label is immediately FOLLOWED by its value (DraftKings /
-  // PrizePicks layout, e.g. "Wager $10", "Entry $5", "To Win $50").
   const stakeLbl = firstMoney(text, /(?:total\s*wager|wager|stake|risk|bet\s*amount|entry(?:\s*fee)?)\s*:?\s*\$\s*([\d,]+\.?\d*)/i);
   if (stakeLbl != null) draft.stake = stakeLbl;
-  const payLbl = firstMoney(text, /(?:total\s*payout|to\s*win|to\s*pay|payout|potential(?:\s*(?:payout|winnings))?|returns?|prize|winnings)\s*:?\s*\$\s*([\d,]+\.?\d*)/i);
+  const payLbl = firstMoney(text, /(?:total\s*payout|to\s*win|to\s*pay|payout|potential(?:\s*(?:payout|winnings))?)\s*:?\s*\$\s*([\d,]+\.?\d*)/i);
   if (payLbl != null) draft.potentialPayout = payLbl;
 
-  // Odds: derive from stake→payout when possible (robust against a crossed-out
-  // original next to a boosted price); else read the first odds token.
-  if (draft.stake > 0 && draft.potentialPayout && draft.potentialPayout > draft.stake) {
+  // Settled outcome. "Cashed out $X" = win (took $X). "Returned $0" = loss;
+  // "Returned $X" pays out $X. Otherwise the bet is open.
+  const settled = parseSettled(lower, dollars, draft.stake);
+  draft.status = settled.status;
+  draft.result = settled.result;
+  if (settled.status === 'settled' && settled.payout != null) draft.potentialPayout = settled.payout;
+
+  // Odds: for OPEN bets derive from stake→payout (robust against a crossed-out
+  // original next to a boosted price); otherwise read the first odds token.
+  if (draft.status === 'open' && draft.stake > 0 && draft.potentialPayout && draft.potentialPayout > draft.stake) {
     draft.oddsAmerican = decimalToAmerican(draft.potentialPayout / draft.stake);
   } else {
-    const oddsMatch = text.match(/([+-]\d{2,4})(?!\d)/);
+    // `(?![\d:])` so a clock/time range like "15:00-19:59" isn't read as odds.
+    const oddsMatch = text.match(/([+-]\d{2,4})(?![\d:])/);
     if (oddsMatch) draft.oddsAmerican = Number(oddsMatch[1]);
   }
 
-  // Matchup, e.g. "USA v Belgium" / "Lakers @ Celtics". A second word only joins
-  // if it's Titlecase (lowercase 2nd letter), so trailing "MON"/"CT" is excluded.
+  // Matchup: "USA v Belgium" style, else two stacked "Team score" lines.
   const TEAM = "[A-Z][\\w.'-]+(?:\\s[A-Z][a-z][\\w.'-]*)?";
   const mm = text.match(new RegExp(`(${TEAM})\\s+(?:v|vs|@)\\s+(${TEAM})`));
-  const matchup = mm ? `${mm[1]!.trim()} v ${mm[2]!.trim()}` : '';
-
   const lines = text
     .split(/\n+/)
     .map((l) => l.trim())
     .filter((l) => l.length > 2 && !/^\$?[\d.,+\-\s%]+$/.test(l));
-  const legLines = lines.filter((l) => /[+-]\d{2,4}|over|under|\bml\b|spread|moneyline/i.test(l) && !/\bv\b|\bvs\b/i.test(l));
+  const matchup = mm ? `${mm[1]!.trim()} v ${mm[2]!.trim()}` : stackedTeams(lines);
+
+  const legLines = lines.filter(
+    (l) => /[+-]\d{2,4}(?![\d:])|over|under|\bml\b|spread|moneyline/i.test(l) && !/\bvs?\b/i.test(l),
+  );
   const chosen = (legLines.length ? legLines : lines).slice(0, 8);
   if (chosen.length) {
     draft.legs = chosen.map((l) => {
-      const legOdds = l.match(/([+-]\d{2,4})(?!\d)/);
+      const legOdds = l.match(/([+-]\d{2,4})(?![\d:])/);
+      const idx = lines.indexOf(l);
+      const next = idx >= 0 ? lines[idx + 1] : undefined;
+      const market = next && isDescriptor(next) ? titleize(next) : '';
       return {
-        selection: l.replace(/([+-]\d{2,4})(?!\d)/g, '').replace(/\s+/g, ' ').trim(),
-        market: '',
+        selection: l.replace(/([+-]\d{2,4})(?![\d:])/g, '').replace(/\s+/g, ' ').trim(),
+        market,
         event: matchup,
         oddsAmerican: legOdds ? Number(legOdds[1]) : null,
         result: null,
@@ -358,16 +379,87 @@ export function draftFromText(text: string): BetDraft {
     if (draft.legs.length > 1 && draft.betType === 'single') draft.betType = 'parlay';
   }
 
-  // Single team bet with no spread/total wording → moneyline; use the derived
-  // ticket odds, and fall back to the matchup's first team for the selection.
-  if (draft.betType === 'single' && draft.legs[0]) {
-    if (!draft.legs[0].selection && mm) draft.legs[0].selection = mm[1]!.trim();
-    // Moneyline unless the SELECTION itself shows a spread/total (a ".5" line).
-    if (!/over|under|spread|\d+\.5/i.test(draft.legs[0].selection)) draft.legs[0].market = 'Moneyline';
-    draft.legs[0].oddsAmerican = draft.oddsAmerican;
+  const first = draft.legs[0];
+  if (draft.betType !== 'parlay' && first) {
+    if (!first.selection && mm) first.selection = mm[1]!.trim();
+    if (!first.market && !/over|under|spread|\d+\.5/i.test(first.selection)) first.market = 'Moneyline';
+    first.oddsAmerican = draft.oddsAmerican;
+    if (draft.status === 'settled') first.result = draft.result;
+    // Exotic soccer/prop markets (throw-ins, corners, cards, half-time…).
+    if (/throw|corner|booking|card|offside|foul|half.?time|match outcome|to (qualify|score)/i.test(`${first.selection} ${first.market}`)) {
+      draft.betType = 'prop';
+    }
   }
 
   return draft;
+}
+
+interface SettledInfo {
+  status: BetDraft['status'];
+  result: BetResult;
+  payout: number | null;
+}
+
+function parseSettled(lower: string, dollars: number[], stake: number): SettledInfo {
+  const amt = dollars.length >= 2 ? dollars[1]! : null;
+  if (/cashed\s*out/.test(lower)) return { status: 'settled', result: 'win', payout: amt ?? stake };
+  if (/\breturned\b|\breturn\b/.test(lower)) {
+    const ret = amt ?? 0;
+    const result: BetResult = ret === 0 ? 'loss' : ret > stake ? 'win' : ret === stake ? 'push' : 'loss';
+    return { status: 'settled', result, payout: ret };
+  }
+  if (/\bwon\b|\bwinner\b|\bpaid\b/.test(lower)) return { status: 'settled', result: 'win', payout: amt };
+  if (/\blost\b|\bloss\b|\blose\b/.test(lower)) return { status: 'settled', result: 'loss', payout: 0 };
+  if (/\bpush\b|\bvoid\b|refund/.test(lower)) return { status: 'settled', result: 'push', payout: stake };
+  return { status: 'open', result: null, payout: null };
+}
+
+/** "Paraguay 0" + "France 1" (stacked) → "Paraguay v France". */
+function stackedTeams(lines: string[]): string {
+  const teams: string[] = [];
+  for (const l of lines) {
+    if (/minute|match|outcome|result|throw|corner|wager|payout|bet\s*id|placed/i.test(l)) continue;
+    const m = l.match(/^([A-Za-z][A-Za-z.' ]{1,22}?)\s+\d+\b/);
+    if (m) teams.push(m[1]!.trim());
+    if (teams.length === 2) break;
+  }
+  return teams.length === 2 ? `${teams[0]} v ${teams[1]}` : '';
+}
+
+function isDescriptor(s: string): boolean {
+  if (/result|outcome|half|full.?time|corners?|throw|money.?line|winner|spread|total|to (qualify|win|score)|handicap|booking|cards?|over\/under/i.test(s)) {
+    return true;
+  }
+  const letters = s.replace(/[^A-Za-z]/g, '');
+  return letters.length >= 4 && s === s.toUpperCase();
+}
+
+function titleize(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/\b([a-z])/g, (_, c: string) => c.toUpperCase())
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Split a "My Bets" list into per-bet blocks (each ends at BET ID / PLACED). */
+function splitIntoBets(text: string): string[] {
+  const rawLines = text.split(/\n+/);
+  const hasPlaced = /placed/i.test(text);
+  const hasBetId = /bet\s*id/i.test(text);
+  if (!hasPlaced && !hasBetId) return [text];
+  const delim = hasPlaced ? /placed/i : /bet\s*id/i;
+  const blocks: string[] = [];
+  let cur: string[] = [];
+  for (const ln of rawLines) {
+    cur.push(ln);
+    if (delim.test(ln)) {
+      blocks.push(cur.join('\n'));
+      cur = [];
+    }
+  }
+  if (cur.join('').trim()) blocks.push(cur.join('\n'));
+  return blocks.filter((b) => b.trim().length > 0);
 }
 
 function decimalToAmerican(dec: number): number {
