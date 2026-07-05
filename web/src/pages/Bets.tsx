@@ -4,7 +4,7 @@ import { BOOK_LABELS, BET_TYPE_LABELS } from '../types';
 import { applyFilter, aggregate, signedMoney } from '../stats';
 import { BetCard } from '../components/BetCard';
 
-const BOOKS: Book[] = ['draftkings', 'fanduel', 'prizepicks'];
+const BOOKS: Book[] = ['draftkings', 'fanduel', 'prizepicks', 'other'];
 const STATUSES: (BetStatus | 'all')[] = ['all', 'open', 'settled'];
 const TYPES: (BetType | 'all')[] = ['all', 'single', 'parlay', 'prop', 'dfs_entry'];
 
@@ -12,10 +12,12 @@ export function Bets({
   bets,
   filter,
   setFilter,
+  onOpen,
 }: {
   bets: Bet[];
   filter: Filter;
   setFilter: (f: Filter) => void;
+  onOpen: (b: Bet) => void;
 }) {
   const filtered = applyFilter(bets, filter);
   const stats = aggregate(filtered);
@@ -80,7 +82,7 @@ export function Bets({
       ) : (
         <motion.div layout>
           {filtered.map((bet, i) => (
-            <BetCard bet={bet} index={i} key={`${bet.book}-${bet.betId}`} />
+            <BetCard bet={bet} index={i} onOpen={onOpen} key={`${bet.book}-${bet.betId}`} />
           ))}
         </motion.div>
       )}

@@ -1,24 +1,27 @@
 /**
  * The common, book-agnostic bet model.
  *
- * Every book's scraper produces a `RawBet` (untouched provider payload) and a
- * `NormalizedBet` (this shape). The dashboard, analytics, and DB only ever see
- * `NormalizedBet` — book-specific quirks stop at the scraper boundary. The raw
- * payload is retained on the DB row so we can re-normalize retroactively when a
- * mapping bug is found, without re-scraping.
+ * Bets are entered by hand or read from a photo of a slip (see the web app's
+ * OCR flow); `book` is just the sportsbook label the user picks. The dashboard,
+ * analytics, and DB all speak this one shape. `league` + the legs' event/team
+ * text let the ESPN layer match a bet to a real game for live stats and a
+ * research-based win-likelihood.
  *
- * PrizePicks is DFS (pick'em entries), not graded single/parlay wagers. It maps
- * onto this same model: an entry becomes one `NormalizedBet` of type `dfs_entry`,
- * and each projection/pick becomes a `Leg`. See src/books/prizepicks.
+ * PrizePicks entries (DFS pick'em) map on cleanly: one entry → one bet of type
+ * `dfs_entry`, each pick → a `Leg`.
  */
 
-export type Book = 'draftkings' | 'fanduel' | 'prizepicks';
+export type Book = 'draftkings' | 'fanduel' | 'prizepicks' | 'other';
 
 export const BOOK_LABELS: Record<Book, string> = {
   draftkings: 'DraftKings',
   fanduel: 'FanDuel',
   prizepicks: 'PrizePicks',
+  other: 'Other',
 };
+
+/** How the bet got into the system. */
+export type BetSource = 'manual' | 'photo';
 
 export type BetType = 'single' | 'parlay' | 'prop' | 'dfs_entry';
 
@@ -69,14 +72,13 @@ export interface NormalizedBet {
   currency: string;
   legs: Leg[];
 
-  /** Untouched provider payload, retained for re-normalization and debugging. */
-  raw: unknown;
-}
+  /** How this bet was entered. */
+  source: BetSource;
+  /** ESPN league id for stat/prediction matching, e.g. "nba", "mlb". Optional. */
+  league?: string | null;
 
-/** A book scraper's pre-normalization output: an id plus the raw payload. */
-export interface RawBet {
-  betId: string;
-  payload: unknown;
+  /** Original OCR text / any import metadata, retained for debugging. Optional. */
+  raw?: unknown;
 }
 
 // --- Derivations ------------------------------------------------------------

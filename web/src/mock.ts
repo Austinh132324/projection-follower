@@ -9,7 +9,7 @@
 
 import type { Bet } from './types';
 
-export const MOCK_BETS: Bet[] = [
+const RAW_MOCK: Omit<Bet, 'source'>[] = [
   {
     book: 'draftkings',
     betId: 'dk-1001',
@@ -307,4 +307,24 @@ export const MOCK_BETS: Bet[] = [
     ],
   },
 ];
+
+// League tags let the ESPN layer match each demo bet to a real game.
+const LEAGUE_BY_ID: Record<string, string> = {
+  'dk-1001': 'nba',
+  'dk-1002': 'mlb',
+  'dk-1003': 'nba',
+  'dk-1004': 'mlb',
+  'fd-2001': 'nba',
+  'fd-2002': 'nfl',
+  'fd-2003': 'mlb',
+  'pp-3001': 'mlb',
+  'pp-3002': 'nba',
+  'pp-3003': 'mlb',
+};
+
+export const MOCK_BETS: Bet[] = RAW_MOCK.map((b) => ({
+  ...b,
+  source: 'manual',
+  league: LEAGUE_BY_ID[b.betId] ?? null,
+}));
 /* ======================= END MOCK DATA ==================================== */
