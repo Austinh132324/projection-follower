@@ -1,0 +1,2 @@
+// Injected by Vite's `define` at build time (see vite.config.ts).
+declare const __BUILD_ID__: string;
