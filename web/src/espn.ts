@@ -31,7 +31,28 @@ export const LEAGUES: League[] = [
   { id: 'epl', label: 'Premier League', path: 'soccer/eng.1' },
   { id: 'ucl', label: 'Champions League', path: 'soccer/uefa.champions' },
   { id: 'mls', label: 'MLS', path: 'soccer/usa.1' },
+  { id: 'wc', label: 'World Cup', path: 'soccer/fifa.world' },
+  { id: 'intl', label: 'Intl (Friendlies)', path: 'soccer/fifa.friendly' },
 ];
+
+/** Keyword → league, for detecting the competition from a slip's text. */
+export const LEAGUE_KEYWORDS: Array<[RegExp, string]> = [
+  [/world cup|qualify for the next round|group stage|knockout stage/i, 'wc'],
+  [/premier league|\bepl\b/i, 'epl'],
+  [/champions league|\bucl\b/i, 'ucl'],
+  [/\bmls\b|major league soccer/i, 'mls'],
+  [/\bnba\b/i, 'nba'],
+  [/\bwnba\b/i, 'wnba'],
+  [/\bnfl\b/i, 'nfl'],
+  [/\bmlb\b/i, 'mlb'],
+  [/\bnhl\b/i, 'nhl'],
+];
+
+export function detectLeague(text: string): string | null {
+  for (const [re, id] of LEAGUE_KEYWORDS) if (re.test(text)) return id;
+  const byId = LEAGUES.find((l) => new RegExp(`\\b${l.id}\\b`, 'i').test(text));
+  return byId?.id ?? null;
+}
 
 export function leagueById(id?: string | null): League | undefined {
   return id ? LEAGUES.find((l) => l.id === id) : undefined;
@@ -190,7 +211,9 @@ async function matchEvent(
   const text = betText(bet);
   const seen = new Set<string>();
 
-  for (const offset of [0, -1, 1]) {
+  // Search the placed date and a few days either side — a bet's game can be
+  // several days out (e.g. a World Cup match placed days ahead).
+  for (const offset of [0, 1, -1, 2, 3, 4]) {
     let events: EspnEvent[];
     try {
       events = await fetchScoreboard(league, shiftDays(baseIso, offset));

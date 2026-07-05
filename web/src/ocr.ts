@@ -11,7 +11,7 @@
 import type { BetDraft, DraftLeg } from './betDraft';
 import { emptyDraft } from './betDraft';
 import type { Book, BetResult } from './types';
-import { LEAGUES } from './espn';
+import { detectLeague } from './espn';
 
 export interface ParseResult {
   draft: BetDraft;
@@ -256,8 +256,7 @@ function parsePrizePicks(text: string, lines: OcrLine[], canvas: HTMLCanvasEleme
     : [{ selection: '', market: '', event: '', oddsAmerican: null, result: null }];
 
   // League hint (soccer World Cup screenshots, NBA, etc.).
-  const leagueHit = LEAGUES.find((l) => new RegExp(`\\b${l.id}\\b`, 'i').test(text));
-  if (leagueHit) draft.league = leagueHit.id;
+  draft.league = detectLeague(text);
 
   // Any green pick means the entry is live/settled; leave the entry itself open
   // unless every pick is resolved (all green in a finished slate).
@@ -289,9 +288,10 @@ export function draftFromText(text: string): BetDraft {
   draft.rawText = text;
   const lower = text.toLowerCase();
 
+  // Book. "Reuse selection" / "Total Wager"/"Total Payout" are FanDuel-isms.
   const bookMap: [RegExp, Book][] = [
-    [/draftkings|draft kings|\bdk\b/, 'draftkings'],
-    [/fanduel|fan duel|\bfd\b/, 'fanduel'],
+    [/draftkings|draft kings/, 'draftkings'],
+    [/fanduel|fan duel|reuse selection|total wager|total payout/, 'fanduel'],
     [/prizepicks|prize picks/, 'prizepicks'],
   ];
   for (const [re, book] of bookMap) if (re.test(lower)) { draft.book = book; break; }
@@ -305,39 +305,52 @@ export function draftFromText(text: string): BetDraft {
   }
 
   if (/\bopen\b|pending|cash\s*out|to\s*win|to\s*pay|potential/.test(lower)) draft.status = 'open';
-  if (/\bwon\b|\bwin\b(?!\s*\$)|cash(ed)?\b|paid|winner/.test(lower)) { draft.status = 'settled'; draft.result = 'win'; }
+  if (/\bwon\b|\bwin\b(?!\s*\$)|cash(ed)?\b|paid|winner/.test(lower) && !/cash\s*out/.test(lower)) { draft.status = 'settled'; draft.result = 'win'; }
   if (/\blost\b|\bloss\b|\blose\b/.test(lower)) { draft.status = 'settled'; draft.result = 'loss'; }
   if (/\bpush\b|void|refund/.test(lower)) { draft.status = 'settled'; draft.result = 'push'; }
 
-  const leagueHit = LEAGUES.find((l) => new RegExp(`\\b${l.id}\\b`, 'i').test(lower));
-  if (leagueHit) draft.league = leagueHit.id;
+  draft.league = detectLeague(text);
 
-  const stake = firstMoney(text, /(?:total\s*wager|wager|stake|risk|bet\s*amount|entry(?:\s*fee)?)\D{0,10}\$?\s*([\d,]+\.?\d*)/i);
-  if (stake != null) draft.stake = stake;
-  const payout = firstMoney(text, /(?:to\s*win|to\s*pay|total\s*payout|payout|potential(?:\s*(?:payout|winnings))?|returns?|prize|winnings)\D{0,10}\$?\s*([\d,]+\.?\d*)/i);
-  if (payout != null) draft.potentialPayout = payout;
-  if (draft.stake === 0) {
-    const dollars = [...text.matchAll(/\$\s*([\d,]+\.?\d*)/g)].map((mm) => Number(mm[1]!.replace(/,/g, '')));
-    if (dollars[0] != null) draft.stake = dollars[0];
-    if (draft.potentialPayout == null && dollars[1] != null) draft.potentialPayout = dollars[1];
+  // Money. Default to the first two dollar amounts in reading order (wager,
+  // payout) — robust for FanDuel, which prints the amounts ABOVE their labels.
+  const dollars = [...text.matchAll(/\$\s*([\d,]+\.?\d*)/g)].map((mm) => Number(mm[1]!.replace(/,/g, '')));
+  if (dollars[0] != null) draft.stake = dollars[0];
+  if (dollars[1] != null) draft.potentialPayout = dollars[1];
+  // Refine only when a label is immediately FOLLOWED by its value (DraftKings /
+  // PrizePicks layout, e.g. "Wager $10", "Entry $5", "To Win $50").
+  const stakeLbl = firstMoney(text, /(?:total\s*wager|wager|stake|risk|bet\s*amount|entry(?:\s*fee)?)\s*:?\s*\$\s*([\d,]+\.?\d*)/i);
+  if (stakeLbl != null) draft.stake = stakeLbl;
+  const payLbl = firstMoney(text, /(?:total\s*payout|to\s*win|to\s*pay|payout|potential(?:\s*(?:payout|winnings))?|returns?|prize|winnings)\s*:?\s*\$\s*([\d,]+\.?\d*)/i);
+  if (payLbl != null) draft.potentialPayout = payLbl;
+
+  // Odds: derive from stake→payout when possible (robust against a crossed-out
+  // original next to a boosted price); else read the first odds token.
+  if (draft.stake > 0 && draft.potentialPayout && draft.potentialPayout > draft.stake) {
+    draft.oddsAmerican = decimalToAmerican(draft.potentialPayout / draft.stake);
+  } else {
+    const oddsMatch = text.match(/([+-]\d{2,4})(?!\d)/);
+    if (oddsMatch) draft.oddsAmerican = Number(oddsMatch[1]);
   }
 
-  const oddsMatch = text.match(/([+-]\d{2,4})(?!\d)/);
-  if (oddsMatch) draft.oddsAmerican = Number(oddsMatch[1]);
+  // Matchup, e.g. "USA v Belgium" / "Lakers @ Celtics". A second word only joins
+  // if it's Titlecase (lowercase 2nd letter), so trailing "MON"/"CT" is excluded.
+  const TEAM = "[A-Z][\\w.'-]+(?:\\s[A-Z][a-z][\\w.'-]*)?";
+  const mm = text.match(new RegExp(`(${TEAM})\\s+(?:v|vs|@)\\s+(${TEAM})`));
+  const matchup = mm ? `${mm[1]!.trim()} v ${mm[2]!.trim()}` : '';
 
   const lines = text
     .split(/\n+/)
     .map((l) => l.trim())
-    .filter((l) => l.length > 3 && !/^\$?[\d.,+\-\s%]+$/.test(l));
-  const legLines = lines.filter((l) => /[+-]\d{2,4}|over|under|\bml\b|spread|moneyline/i.test(l));
+    .filter((l) => l.length > 2 && !/^\$?[\d.,+\-\s%]+$/.test(l));
+  const legLines = lines.filter((l) => /[+-]\d{2,4}|over|under|\bml\b|spread|moneyline/i.test(l) && !/\bv\b|\bvs\b/i.test(l));
   const chosen = (legLines.length ? legLines : lines).slice(0, 8);
   if (chosen.length) {
     draft.legs = chosen.map((l) => {
       const legOdds = l.match(/([+-]\d{2,4})(?!\d)/);
       return {
-        selection: l.replace(/([+-]\d{2,4})(?!\d)/, '').trim(),
+        selection: l.replace(/([+-]\d{2,4})(?!\d)/g, '').replace(/\s+/g, ' ').trim(),
         market: '',
-        event: '',
+        event: matchup,
         oddsAmerican: legOdds ? Number(legOdds[1]) : null,
         result: null,
       };
@@ -345,7 +358,22 @@ export function draftFromText(text: string): BetDraft {
     if (draft.legs.length > 1 && draft.betType === 'single') draft.betType = 'parlay';
   }
 
+  // Single team bet with no spread/total wording → moneyline; use the derived
+  // ticket odds, and fall back to the matchup's first team for the selection.
+  if (draft.betType === 'single' && draft.legs[0]) {
+    if (!draft.legs[0].selection && mm) draft.legs[0].selection = mm[1]!.trim();
+    // Moneyline unless the SELECTION itself shows a spread/total (a ".5" line).
+    if (!/over|under|spread|\d+\.5/i.test(draft.legs[0].selection)) draft.legs[0].market = 'Moneyline';
+    draft.legs[0].oddsAmerican = draft.oddsAmerican;
+  }
+
   return draft;
+}
+
+function decimalToAmerican(dec: number): number {
+  if (dec <= 1) return 0;
+  const profit = dec - 1;
+  return profit >= 1 ? Math.round(profit * 100) : Math.round(-100 / profit);
 }
 
 // --- shared helpers ----------------------------------------------------------
