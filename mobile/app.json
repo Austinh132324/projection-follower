@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "BetFollow",
+    "slug": "betfollow",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "betfollow",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0a0a10",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0a10"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.betfollow.app",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "BetFollow lets you import a bet slip screenshot from your photo library.",
+        "NSCameraUsageDescription": "BetFollow lets you snap a photo of a bet slip to import it."
+      }
+    },
+    "android": {
+      "package": "com.betfollow.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0a0a10"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "BetFollow lets you import a bet slip screenshot from your photo library.",
+          "cameraPermission": "BetFollow lets you snap a photo of a bet slip to import it."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": ""
+      }
+    }
+  }
+}

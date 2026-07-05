@@ -1,0 +1,51 @@
+# Builds the mobile app (mobile/) with EAS Build.
+#
+# Runs only when you start it by hand: Actions → "EAS Build (mobile)" → Run
+# workflow, and choose a platform + profile.
+#
+# One-time setup:
+#   1. Create an Expo account and run `eas init` inside mobile/ (fills
+#      app.json > extra.eas.projectId).
+#   2. Create an Expo access token (expo.dev → account settings → Access tokens)
+#      and add it as the repo secret EXPO_TOKEN
+#      (Settings → Secrets and variables → Actions).
+name: EAS Build (mobile)
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        type: choice
+        default: android
+        options: [android, ios, all]
+      profile:
+        description: EAS build profile (see mobile/eas.json)
+        type: choice
+        default: preview
+        options: [development, preview, production]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: npm ci
+
+      - name: Build with EAS
+        run: eas build --non-interactive --no-wait --platform ${{ inputs.platform }} --profile ${{ inputs.profile }}
