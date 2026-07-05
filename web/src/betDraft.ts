@@ -91,7 +91,9 @@ export function draftToBet(draft: BetDraft): Bet {
       market: l.market.trim() || undefined,
       event: l.event.trim() || undefined,
       oddsAmerican: l.oddsAmerican,
-      result: draft.status === 'settled' ? l.result : null,
+      // Keep per-leg results as parsed — a DFS entry can be open overall while
+      // individual picks have already hit (green).
+      result: l.result,
     }));
 
   return {
