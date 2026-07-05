@@ -47,24 +47,28 @@ export function GearIcon({ active }: P) {
   );
 }
 
-// A rising projection trajectory ending in a target node — "following the
-// projection". Reused for the login mark and the app icons.
+// BetFollow mark: three ascending bars in purple, matching the app icon.
 export function LogoMark({ size = 24 }: { size?: number }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" width={size} height={size}>
-      <path d="M3.5 18C9 18 10.5 6.5 20 6.2" stroke="#fff" strokeWidth="2.4"
-        strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="20" cy="6.2" r="2.5" fill="#fff" />
-      <circle cx="3.5" cy="18" r="1.8" fill="#fff" fillOpacity="0.55" />
+      <defs>
+        <linearGradient id="pf-bar" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#a78bfa" />
+          <stop offset="100%" stopColor="#7c3aed" />
+        </linearGradient>
+      </defs>
+      <rect x="4.6" y="13.4" width="3.7" height="6" rx="1.3" fill="#4c4270" />
+      <rect x="10.15" y="9.4" width="3.7" height="10" rx="1.3" fill="#6d5bb0" />
+      <rect x="15.7" y="5.4" width="3.7" height="14" rx="1.3" fill="url(#pf-bar)" />
     </svg>
   );
 }
 
-// The logo on its gradient badge — matches the app / home-screen icon.
+// The logo on its dark tile — matches the app / home-screen icon.
 export function LogoBadge({ size = 38 }: { size?: number }) {
   return (
-    <div className="logo-badge" style={{ width: size, height: size }}>
-      <LogoMark size={Math.round(size * 0.56)} />
+    <div className="logo-badge" style={{ width: size, height: size, borderRadius: Math.round(size * 0.28) }}>
+      <LogoMark size={Math.round(size * 0.66)} />
     </div>
   );
 }

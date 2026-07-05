@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../auth';
-import { LogoMark } from './icons';
+import { LogoBadge } from './icons';
 
 export function Login() {
   const { login } = useAuth();
@@ -23,10 +23,8 @@ export function Login() {
       transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
     >
       <div className="login-brand" style={{ flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-        <div className="login-logo" style={{ width: 66, height: 66, borderRadius: 20 }}>
-          <LogoMark size={34} />
-        </div>
-        <h1 style={{ fontSize: 24 }}>Projection Follower</h1>
+        <LogoBadge size={72} />
+        <h1 style={{ fontSize: 24 }}>BetFollow</h1>
       </div>
 
       <div className="field">
