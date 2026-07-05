@@ -3,13 +3,26 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from './auth';
 import { Login } from './components/Login';
 import { BottomNav, type Tab } from './components/BottomNav';
+import { FullscreenToggle } from './components/FullscreenToggle';
+import { AddSheet } from './components/AddSheet';
+import { BetForm } from './components/BetForm';
+import { PhotoImport } from './components/PhotoImport';
+import { BetDetail } from './components/BetDetail';
 import { Home } from './pages/Home';
 import { Bets } from './pages/Bets';
 import { Stats } from './pages/Stats';
 import { Settings } from './pages/Settings';
-import { fetchBets } from './api';
+import { loadBets, saveBet, removeBet } from './api';
+import { emptyDraft } from './betDraft';
 import type { Bet, Filter } from './types';
 import { EMPTY_FILTER } from './types';
+
+type Overlay =
+  | { kind: 'none' }
+  | { kind: 'add' }
+  | { kind: 'manual' }
+  | { kind: 'photo' }
+  | { kind: 'detail'; bet: Bet };
 
 export default function App() {
   const { isAuthed } = useAuth();
@@ -24,19 +37,34 @@ function Shell() {
   const [tab, setTab] = useState<Tab>('home');
   const [bets, setBets] = useState<Bet[] | null>(null);
   const [filter, setFilter] = useState<Filter>(EMPTY_FILTER);
+  const [overlay, setOverlay] = useState<Overlay>({ kind: 'none' });
 
-  const load = useCallback(() => {
-    fetchBets()
+  const reload = useCallback(() => {
+    loadBets()
       .then(setBets)
       .catch(() => setBets([]));
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => reload(), [reload]);
+
+  const handleSave = async (bet: Bet) => {
+    await saveBet(bet);
+    reload();
+    setOverlay({ kind: 'none' });
+  };
+
+  const handleDelete = async (bet: Bet) => {
+    await removeBet(bet.book, bet.betId);
+    reload();
+    setOverlay({ kind: 'none' });
+  };
+
+  const openDetail = (bet: Bet) => setOverlay({ kind: 'detail', bet });
+  const close = () => setOverlay({ kind: 'none' });
 
   return (
     <div className="app">
+      <FullscreenToggle />
       <AnimatePresence mode="wait">
         <motion.div
           key={tab}
@@ -48,12 +76,38 @@ function Shell() {
           {bets === null ? (
             <div className="spinner" />
           ) : (
-            <Page tab={tab} bets={bets} filter={filter} setFilter={setFilter} onNav={setTab} reload={load} />
+            <Page
+              tab={tab}
+              bets={bets}
+              filter={filter}
+              setFilter={setFilter}
+              onNav={setTab}
+              onOpen={openDetail}
+              reload={reload}
+            />
           )}
         </motion.div>
       </AnimatePresence>
 
-      <BottomNav active={tab} onChange={setTab} />
+      <BottomNav active={tab} onChange={setTab} onAdd={() => setOverlay({ kind: 'add' })} />
+
+      <AnimatePresence>
+        {overlay.kind === 'add' && (
+          <AddSheet
+            key="add"
+            onClose={close}
+            onManual={() => setOverlay({ kind: 'manual' })}
+            onPhoto={() => setOverlay({ kind: 'photo' })}
+          />
+        )}
+        {overlay.kind === 'manual' && (
+          <BetForm key="manual" initial={emptyDraft('manual')} title="New bet" onSave={handleSave} onClose={close} />
+        )}
+        {overlay.kind === 'photo' && <PhotoImport key="photo" onSave={handleSave} onClose={close} />}
+        {overlay.kind === 'detail' && (
+          <BetDetail key="detail" bet={overlay.bet} onClose={close} onDelete={handleDelete} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -64,6 +118,7 @@ function Page({
   filter,
   setFilter,
   onNav,
+  onOpen,
   reload,
 }: {
   tab: Tab;
@@ -71,16 +126,17 @@ function Page({
   filter: Filter;
   setFilter: (f: Filter) => void;
   onNav: (t: Tab) => void;
+  onOpen: (b: Bet) => void;
   reload: () => void;
 }) {
   switch (tab) {
     case 'home':
-      return <Home bets={bets} onSeeAll={onNav} />;
+      return <Home bets={bets} onSeeAll={onNav} onOpen={onOpen} />;
     case 'bets':
-      return <Bets bets={bets} filter={filter} setFilter={setFilter} />;
+      return <Bets bets={bets} filter={filter} setFilter={setFilter} onOpen={onOpen} />;
     case 'stats':
       return <Stats bets={bets} />;
     case 'settings':
-      return <Settings onSynced={reload} />;
+      return <Settings onReset={reload} />;
   }
 }

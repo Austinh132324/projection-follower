@@ -2,19 +2,25 @@
 // small, standalone copy so the web app builds independently of the Node package
 // — the API returns exactly this shape.
 
-export type Book = 'draftkings' | 'fanduel' | 'prizepicks';
+export type Book = 'draftkings' | 'fanduel' | 'prizepicks' | 'other';
 
 export const BOOK_LABELS: Record<Book, string> = {
   draftkings: 'DraftKings',
   fanduel: 'FanDuel',
   prizepicks: 'PrizePicks',
+  other: 'Other',
 };
 
 export const BOOK_ACCENT: Record<Book, string> = {
   draftkings: '#53d337',
   fanduel: '#1493ff',
   prizepicks: '#8b5cff',
+  other: '#8a8aa3',
 };
+
+export const BOOKS: Book[] = ['draftkings', 'fanduel', 'prizepicks', 'other'];
+
+export type BetSource = 'manual' | 'photo';
 
 export type BetType = 'single' | 'parlay' | 'prop' | 'dfs_entry';
 
@@ -51,6 +57,15 @@ export interface Bet {
   payout: number | null;
   currency: string;
   legs: Leg[];
+
+  /** How the bet was entered. */
+  source: BetSource;
+  /** ESPN league id (see espn.ts LEAGUES) for live stats + prediction matching. */
+  league?: string | null;
+  /** Kickoff/first-pitch time for ESPN matching; defaults to placedAt if unknown. */
+  eventDate?: string | null;
+  /** Original OCR text when imported from a photo. */
+  raw?: unknown;
 }
 
 export interface Filter {

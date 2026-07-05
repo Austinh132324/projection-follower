@@ -5,7 +5,15 @@ import { aggregate, statsByBook, signedMoney, money, pct } from '../stats';
 import { BetCard } from '../components/BetCard';
 import type { Tab } from '../components/BottomNav';
 
-export function Home({ bets, onSeeAll }: { bets: Bet[]; onSeeAll: (t: Tab) => void }) {
+export function Home({
+  bets,
+  onSeeAll,
+  onOpen,
+}: {
+  bets: Bet[];
+  onSeeAll: (t: Tab) => void;
+  onOpen: (b: Bet) => void;
+}) {
   const stats = aggregate(bets);
   const byBook = statsByBook(bets);
   const recent = [...bets]
@@ -82,7 +90,7 @@ export function Home({ bets, onSeeAll }: { bets: Bet[]; onSeeAll: (t: Tab) => vo
         </button>
       </div>
       {recent.map((bet, i) => (
-        <BetCard bet={bet} index={i} key={`${bet.book}-${bet.betId}`} />
+        <BetCard bet={bet} index={i} onOpen={onOpen} key={`${bet.book}-${bet.betId}`} />
       ))}
     </div>
   );

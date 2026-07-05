@@ -2,36 +2,70 @@ import type { Bet } from './types';
 import { MOCK_BETS } from './mock';
 
 /**
- * Data layer. One switch decides where bets come from:
+ * Persistence. One switch decides where bets live:
  *
- *   USE_MOCK = true   -> bundled mock data (static GitHub Pages, no backend)
- *   USE_MOCK = false  -> GET /api/bets from the real Express server
+ *   USE_MOCK = true   -> browser localStorage (static GitHub Pages; seeded once
+ *                        with demo data). Your hand-entered / photo bets persist
+ *                        on the device.
+ *   USE_MOCK = false  -> the Express backend (SQLite) via /api/bets.
  *
- * Defaults to mock so the Pages build "just works". Set VITE_USE_MOCK=false when
- * running against the local backend (`npm run web:dev` with the API up).
- *
- * All filtering + stats happen client-side (see stats.ts), so both paths return
- * the same thing: a flat list of bets.
+ * Defaults to mock so the Pages build works with no backend. Set
+ * VITE_USE_MOCK=false to run against the local API.
  */
 export const USE_MOCK = (import.meta.env.VITE_USE_MOCK ?? 'true') !== 'false';
 
-export async function fetchBets(): Promise<Bet[]> {
-  if (USE_MOCK) {
-    // Simulate a little latency so loading states are exercised in the demo.
-    await new Promise((r) => setTimeout(r, 250));
-    return MOCK_BETS;
+const LS_KEY = 'pf-bets';
+
+function readLocal(): Bet[] {
+  const raw = localStorage.getItem(LS_KEY);
+  if (raw) {
+    try {
+      return JSON.parse(raw) as Bet[];
+    } catch {
+      /* fall through to seed */
+    }
   }
+  // First run: seed with the demo bets so the app isn't empty.
+  localStorage.setItem(LS_KEY, JSON.stringify(MOCK_BETS));
+  return MOCK_BETS;
+}
+
+function writeLocal(bets: Bet[]): void {
+  localStorage.setItem(LS_KEY, JSON.stringify(bets));
+}
+
+export async function loadBets(): Promise<Bet[]> {
+  if (USE_MOCK) return readLocal();
   const res = await fetch('/api/bets');
   if (!res.ok) throw new Error(`Failed to load bets (${res.status})`);
   const body = (await res.json()) as { bets: Bet[] };
   return body.bets;
 }
 
-export async function triggerSync(): Promise<void> {
+export async function saveBet(bet: Bet): Promise<void> {
   if (USE_MOCK) {
-    await new Promise((r) => setTimeout(r, 600));
+    const bets = readLocal().filter((b) => !(b.book === bet.book && b.betId === bet.betId));
+    writeLocal([bet, ...bets]);
     return;
   }
-  const res = await fetch('/api/sync', { method: 'POST' });
-  if (!res.ok) throw new Error(`Sync failed (${res.status})`);
+  const res = await fetch('/api/bets', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(bet),
+  });
+  if (!res.ok) throw new Error(`Failed to save bet (${res.status})`);
+}
+
+export async function removeBet(book: string, betId: string): Promise<void> {
+  if (USE_MOCK) {
+    writeLocal(readLocal().filter((b) => !(b.book === book && b.betId === betId)));
+    return;
+  }
+  const res = await fetch(`/api/bets/${book}/${betId}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`Failed to delete bet (${res.status})`);
+}
+
+/** Reset local demo data back to the seed (mock mode only). */
+export function resetLocal(): void {
+  if (USE_MOCK) writeLocal(MOCK_BETS);
 }

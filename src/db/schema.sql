@@ -23,7 +23,10 @@ CREATE TABLE IF NOT EXISTS bets (
   payout           REAL,                          -- realized return once settled, else NULL
   currency         TEXT    NOT NULL DEFAULT 'USD',
 
-  raw_payload      TEXT    NOT NULL,              -- untouched provider JSON (re-normalization)
+  source           TEXT    NOT NULL DEFAULT 'manual', -- manual | photo
+  league           TEXT,                          -- ESPN league id for stat/prediction matching
+
+  raw_payload      TEXT,                           -- original OCR text / import metadata (nullable)
 
   first_seen_at    TEXT    NOT NULL,              -- when our sync first stored it
   updated_at       TEXT    NOT NULL,              -- last time sync touched it
@@ -48,12 +51,4 @@ CREATE TABLE IF NOT EXISTS legs (
 
   PRIMARY KEY (book, bet_id, leg_index),
   FOREIGN KEY (book, bet_id) REFERENCES bets (book, bet_id) ON DELETE CASCADE
-);
-
--- Bookkeeping for sync runs: last successful pull per book, for incremental fetches.
-CREATE TABLE IF NOT EXISTS sync_state (
-  book               TEXT PRIMARY KEY,
-  last_synced_at     TEXT,                        -- ISO 8601 UTC of last successful run
-  last_bet_placed_at TEXT,                        -- watermark: newest placed_at we've stored
-  last_error         TEXT
 );
