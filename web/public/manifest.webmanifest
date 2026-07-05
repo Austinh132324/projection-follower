@@ -1,6 +1,6 @@
 {
-  "name": "Projection Follower",
-  "short_name": "Follower",
+  "name": "BetFollow",
+  "short_name": "BetFollow",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

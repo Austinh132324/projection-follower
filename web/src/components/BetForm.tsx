@@ -217,7 +217,17 @@ export function BetForm({
         {ocrText && (
           <details className="note" style={{ marginTop: 14 }}>
             <summary style={{ cursor: 'pointer', fontWeight: 700 }}>Scanned text</summary>
-            <pre style={{ whiteSpace: 'pre-wrap', margin: '8px 0 0', fontSize: 12 }}>{ocrText}</pre>
+            <pre
+              style={{
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                overflowWrap: 'anywhere',
+                margin: '8px 0 0',
+                fontSize: 12,
+              }}
+            >
+              {ocrText}
+            </pre>
           </details>
         )}
 

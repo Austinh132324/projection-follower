@@ -1,4 +1,4 @@
-# Projection Follower
+# BetFollow
 
 A personal, single-user bet tracker: log your bets by hand or by **snapping a photo of the slip**, then track W/L, ROI, and open exposure on one mobile dashboard. Tap any bet to pull its **live game score and a research-based win-likelihood from ESPN** — model vs. market, not just the odds.
 

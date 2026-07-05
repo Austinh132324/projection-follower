@@ -32,7 +32,7 @@ export function Settings() {
       </motion.button>
 
       <p className="screen-sub" style={{ marginTop: 24, textAlign: 'center' }}>
-        Projection Follower
+        BetFollow
       </p>
     </div>
   );
