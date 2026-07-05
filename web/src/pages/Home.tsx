@@ -3,7 +3,7 @@ import type { Bet } from '../types';
 import { BOOK_ACCENT, BOOK_LABELS } from '../types';
 import { aggregate, statsByBook, signedMoney, money, pct } from '../stats';
 import { BetCard } from '../components/BetCard';
-import { PlusIcon } from '../components/icons';
+import { PlusIcon, LogoBadge } from '../components/icons';
 import type { Tab } from '../components/BottomNav';
 
 export function Home({
@@ -21,7 +21,10 @@ export function Home({
     return (
       <div className="screen">
         <div className="screen-header">
-          <h1 className="screen-title">Dashboard</h1>
+          <div className="brand-row">
+            <LogoBadge size={34} />
+            <h1 className="screen-title">Dashboard</h1>
+          </div>
         </div>
         <div className="empty" style={{ paddingTop: 90 }}>
           <div className="big">📈</div>
@@ -44,7 +47,10 @@ export function Home({
   return (
     <div className="screen">
       <div className="screen-header">
-        <h1 className="screen-title">Dashboard</h1>
+        <div className="brand-row">
+          <LogoBadge size={34} />
+          <h1 className="screen-title">Dashboard</h1>
+        </div>
       </div>
 
       <motion.div

@@ -60,6 +60,15 @@ export function LogoMark({ size = 24 }: { size?: number }) {
   );
 }
 
+// The logo on its gradient badge — matches the app / home-screen icon.
+export function LogoBadge({ size = 38 }: { size?: number }) {
+  return (
+    <div className="logo-badge" style={{ width: size, height: size }}>
+      <LogoMark size={Math.round(size * 0.56)} />
+    </div>
+  );
+}
+
 export function SyncIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"

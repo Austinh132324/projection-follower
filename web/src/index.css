@@ -551,6 +551,21 @@ textarea {
 }
 .bar-fill { height: 100%; border-radius: 999px; }
 
+.logo-badge {
+  border-radius: 11px;
+  background: var(--accent-grad);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 6px 16px rgba(124, 92, 255, 0.4);
+  flex-shrink: 0;
+}
+
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 /* --- Center Add FAB -------------------------------------------------------- */
 
 .nav-fab-slot {
