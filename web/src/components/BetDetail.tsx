@@ -5,6 +5,7 @@ import { BOOK_LABELS, BOOK_ACCENT, BET_TYPE_LABELS } from '../types';
 import { netProfit, signedMoney, money, americanOdds, formatDate } from '../stats';
 import { assessBet, type EspnInsight } from '../espn';
 import { CloseIcon, TrashIcon } from './icons';
+import { KickoffCard, WinProbChart, LinescoreTable } from './GameViews';
 
 export function BetDetail({
   bet,
@@ -81,7 +82,9 @@ export function BetDetail({
 
         {/* ESPN insight */}
         <div className="section-head" style={{ marginTop: 6 }}>
-          <h2 style={{ fontSize: 15 }}>Live game &amp; research</h2>
+          <h2 style={{ fontSize: 15 }}>
+            {insight?.event?.state === 'pre' ? 'Matchup' : insight?.event?.state === 'in' ? 'Live' : 'Game'} &amp; research
+          </h2>
           <span style={{ color: 'var(--faint)', fontSize: 11 }}>via ESPN</span>
         </div>
 
@@ -93,23 +96,24 @@ export function BetDetail({
 
         {!loading && insight?.matched && insight.event && (
           <>
-            <Scorebug insight={insight} />
+            {insight.event.state === 'pre' ? (
+              <KickoffCard event={insight.event} prediction={insight.prediction} />
+            ) : (
+              <>
+                <Scorebug insight={insight} />
+                {insight.event.state === 'in' && insight.winProbTimeline && (
+                  <WinProbChart
+                    timeline={insight.winProbTimeline}
+                    homeAbbr={insight.event.competitors.find((c) => c.homeAway === 'home')?.abbreviation ?? 'HOME'}
+                    awayAbbr={insight.event.competitors.find((c) => c.homeAway === 'away')?.abbreviation ?? 'AWAY'}
+                  />
+                )}
+                <LinescoreTable event={insight.event} />
+              </>
+            )}
             {insight.prediction && <PredictionCard insight={insight} />}
             {insight.odds && <OddsCard insight={insight} />}
-            {insight.relatedStats && insight.relatedStats.length > 0 && (
-              <div className="card">
-                {insight.relatedStats.map((s, i) => (
-                  <div className="row" key={i}>
-                    <span className="k">{s.label}</span>
-                    <span className="v">{s.value}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            <p className="note">
-              Prediction blends ESPN’s matchup model with records and the bet’s price. It’s an
-              estimate for research — not a guarantee or betting advice.
-            </p>
+            <p className="note">Estimate for research — not betting advice.</p>
           </>
         )}
 

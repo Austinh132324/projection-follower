@@ -47,14 +47,25 @@ export function GearIcon({ active }: P) {
   );
 }
 
-export function LogoMark() {
+// A rising projection trajectory ending in a target node — "following the
+// projection". Reused for the login mark and the app icons.
+export function LogoMark({ size = 24 }: { size?: number }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"
-      strokeLinecap="round" strokeLinejoin="round" width="24" height="24">
-      <path d="M4 15l5-5 4 4 7-8" />
-      <path d="M20 6v5" />
-      <path d="M20 6h-5" />
+    <svg viewBox="0 0 24 24" fill="none" width={size} height={size}>
+      <path d="M3.5 18C9 18 10.5 6.5 20 6.2" stroke="#fff" strokeWidth="2.4"
+        strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="20" cy="6.2" r="2.5" fill="#fff" />
+      <circle cx="3.5" cy="18" r="1.8" fill="#fff" fillOpacity="0.55" />
     </svg>
+  );
+}
+
+// The logo on its gradient badge — matches the app / home-screen icon.
+export function LogoBadge({ size = 38 }: { size?: number }) {
+  return (
+    <div className="logo-badge" style={{ width: size, height: size }}>
+      <LogoMark size={Math.round(size * 0.56)} />
+    </div>
   );
 }
 

@@ -83,7 +83,7 @@ function Shell() {
               setFilter={setFilter}
               onNav={setTab}
               onOpen={openDetail}
-              reload={reload}
+              onAdd={() => setOverlay({ kind: 'add' })}
             />
           )}
         </motion.div>
@@ -119,7 +119,7 @@ function Page({
   setFilter,
   onNav,
   onOpen,
-  reload,
+  onAdd,
 }: {
   tab: Tab;
   bets: Bet[];
@@ -127,16 +127,16 @@ function Page({
   setFilter: (f: Filter) => void;
   onNav: (t: Tab) => void;
   onOpen: (b: Bet) => void;
-  reload: () => void;
+  onAdd: () => void;
 }) {
   switch (tab) {
     case 'home':
-      return <Home bets={bets} onSeeAll={onNav} onOpen={onOpen} />;
+      return <Home bets={bets} onSeeAll={onNav} onOpen={onOpen} onAdd={onAdd} />;
     case 'bets':
       return <Bets bets={bets} filter={filter} setFilter={setFilter} onOpen={onOpen} />;
     case 'stats':
       return <Stats bets={bets} />;
     case 'settings':
-      return <Settings onReset={reload} />;
+      return <Settings />;
   }
 }

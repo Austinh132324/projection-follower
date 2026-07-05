@@ -11,7 +11,7 @@
 // It is an estimate, not betting advice.
 
 import type { Bet } from './types';
-import { USE_MOCK } from './api';
+import { USE_LOCAL } from './api';
 
 export interface League {
   id: string;
@@ -48,6 +48,8 @@ export interface EspnCompetitor {
   score: number | null;
   record: string | null;
   winner: boolean | null;
+  /** Per-period scoring (quarters / innings / halves). */
+  linescores: number[];
   logo?: string;
 }
 
@@ -91,6 +93,8 @@ export interface EspnInsight {
   event?: EspnEvent;
   prediction?: Prediction;
   odds?: EspnOdds;
+  /** Home-team win probability over the course of a live/finished game, 0–100. */
+  winProbTimeline?: number[];
   relatedStats?: { label: string; value: string }[];
   error?: string;
 }
@@ -105,7 +109,7 @@ async function espnFetch(url: string): Promise<unknown> {
   } catch {
     /* CORS or network — fall through to the backend proxy if available */
   }
-  if (!USE_MOCK) {
+  if (!USE_LOCAL) {
     const res = await fetch(`/api/espn?url=${encodeURIComponent(url)}`);
     if (res.ok) return res.json();
   }
@@ -137,6 +141,9 @@ function parseEvent(raw: any): EspnEvent | null {
     score: c.score != null ? Number(c.score) : null,
     record: c.records?.[0]?.summary ?? null,
     winner: typeof c.winner === 'boolean' ? c.winner : null,
+    linescores: (c.linescores ?? [])
+      .map((l: any) => Number(l.value ?? l.displayValue))
+      .filter((n: number) => Number.isFinite(n)),
     logo: c.team?.logo,
   }));
   return {
@@ -214,7 +221,11 @@ async function matchEvent(
 async function fetchSummary(
   league: League,
   eventId: string,
-): Promise<{ predictor: { home: number | null; away: number | null }; odds?: EspnOdds }> {
+): Promise<{
+  predictor: { home: number | null; away: number | null };
+  odds?: EspnOdds;
+  winProbTimeline?: number[];
+}> {
   try {
     const url = `${SITE_API}/${league.path}/summary?event=${eventId}`;
     const data = (await espnFetch(url)) as any;
@@ -222,10 +233,27 @@ async function fetchSummary(
     return {
       predictor: { home: num(p?.homeTeam?.gameProjection), away: num(p?.awayTeam?.gameProjection) },
       odds: parseOdds(data),
+      winProbTimeline: parseWinProb(data),
     };
   } catch {
     return { predictor: { home: null, away: null } };
   }
+}
+
+/** ESPN win-probability array → home win % over time (0–100), downsampled. */
+function parseWinProb(data: any): number[] | undefined {
+  const wp = data?.winprobability;
+  if (!Array.isArray(wp) || wp.length < 2) return undefined;
+  const pts = wp
+    .map((w: any) => num(w.homeWinPercentage))
+    .filter((n: number | null): n is number => n != null)
+    .map((n: number) => (n <= 1 ? n * 100 : n));
+  if (pts.length < 2) return undefined;
+  // Downsample to at most 60 points for a clean sparkline.
+  const step = Math.max(1, Math.ceil(pts.length / 60));
+  const out = pts.filter((_, i) => i % step === 0);
+  if (out[out.length - 1] !== pts[pts.length - 1]) out.push(pts[pts.length - 1]!);
+  return out;
 }
 
 function parseOdds(data: any): EspnOdds | undefined {
@@ -360,6 +388,7 @@ export async function assessBet(bet: Bet): Promise<EspnInsight> {
       event: found.event,
       prediction: buildPrediction(bet, found.event, found.picked, summary.predictor),
       odds: summary.odds,
+      winProbTimeline: summary.winProbTimeline,
       relatedStats: relatedStats(found.event),
     };
   } catch (err) {

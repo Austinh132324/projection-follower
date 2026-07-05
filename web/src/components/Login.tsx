@@ -11,9 +11,7 @@ export function Login() {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!login(username, password)) {
-      setError('Incorrect username or password.');
-    }
+    if (!login(username, password)) setError('Incorrect username or password.');
   };
 
   return (
@@ -24,25 +22,19 @@ export function Login() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
     >
-      <div className="login-brand">
-        <div className="login-logo">
-          <LogoMark />
+      <div className="login-brand" style={{ flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+        <div className="login-logo" style={{ width: 66, height: 66, borderRadius: 20 }}>
+          <LogoMark size={34} />
         </div>
-        <div>
-          <h1>Projection Follower</h1>
-          <p>Your personal bet tracker</p>
-        </div>
+        <h1 style={{ fontSize: 24 }}>Projection Follower</h1>
       </div>
 
-      <h2>Welcome back</h2>
-      <p className="lede">Sign in to see your W/L, ROI, and open exposure.</p>
-
       <div className="field">
-        <label htmlFor="username">Username</label>
         <input
           id="username"
           autoCapitalize="none"
           autoCorrect="off"
+          placeholder="Username"
           value={username}
           onChange={(e) => {
             setUsername(e.target.value);
@@ -52,10 +44,10 @@ export function Login() {
       </div>
 
       <div className="field">
-        <label htmlFor="password">Password</label>
         <input
           id="password"
           type="password"
+          placeholder="Password"
           value={password}
           onChange={(e) => {
             setPassword(e.target.value);
@@ -69,12 +61,6 @@ export function Login() {
       <motion.button className="btn" type="submit" whileTap={{ scale: 0.97 }} style={{ marginTop: 6 }}>
         Sign in
       </motion.button>
-
-      {/* MOCK AUTH HINT — delete along with the mock auth for real deployment. */}
-      <div className="login-hint">
-        Demo build · use <b>austin</b> / <b>admin</b>. This is a static preview backed by mock
-        data — no real accounts are touched.
-      </div>
     </motion.form>
   );
 }
