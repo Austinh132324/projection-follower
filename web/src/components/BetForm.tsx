@@ -50,7 +50,9 @@ export function BetForm({
   const removeLeg = (i: number) =>
     setDraft((d) => ({ ...d, legs: d.legs.filter((_, idx) => idx !== i) }));
 
-  const canSave = draft.stake > 0 && draft.legs.some((l) => l.selection.trim());
+  const canSave =
+    draft.legs.some((l) => l.selection.trim()) &&
+    (draft.stake > 0 || (draft.potentialPayout ?? 0) > 0);
   const projected = computePotentialPayout(draft);
 
   return (
