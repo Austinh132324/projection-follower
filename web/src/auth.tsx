@@ -10,7 +10,7 @@
 
 import { createContext, useContext, useState, type ReactNode } from 'react';
 
-const MOCK_USERNAME = 'austin';
+const MOCK_USERS = ['austin', 'brian', 'allison', 'steven', 'jordan'];
 const MOCK_PASSWORD = 'admin';
 const STORAGE_KEY = 'pf-mock-auth';
 
@@ -29,7 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = (username: string, password: string): boolean => {
     const ok =
-      username.trim().toLowerCase() === MOCK_USERNAME && password === MOCK_PASSWORD;
+      MOCK_USERS.includes(username.trim().toLowerCase()) && password === MOCK_PASSWORD;
     if (ok) {
       localStorage.setItem(STORAGE_KEY, 'true');
       setIsAuthed(true);

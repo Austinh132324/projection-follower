@@ -31,11 +31,17 @@ export const tesseractParser: BetSlipParser = {
   id: 'tesseract',
   label: 'On-device OCR',
   async parse(file, onProgress) {
-    // Draw the image to a canvas up front — used for PrizePicks green detection.
+    // Draw the image to a canvas up front. The colour original is used for
+    // PrizePicks green detection; a preprocessed copy is fed to OCR.
     const canvas = await fileToCanvas(file);
 
     const { default: Tesseract } = await import('tesseract.js');
-    const { data } = await Tesseract.recognize(file, 'eng', {
+    // Sportsbook/DFS apps are dark-themed (light text on black), which OCR reads
+    // badly. Invert + grayscale + boost contrast so it's dark text on light —
+    // a big accuracy win. Same dimensions, so coordinates still line up with the
+    // colour canvas used for green detection.
+    const ocrTarget: File | HTMLCanvasElement = canvas ? preprocessForOcr(canvas) : file;
+    const { data } = await Tesseract.recognize(ocrTarget, 'eng', {
       logger: (m: { status: string; progress: number }) => {
         if (m.status === 'recognizing text') onProgress?.(m.progress);
       },
@@ -96,6 +102,35 @@ async function fileToCanvas(file: File): Promise<HTMLCanvasElement | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Prepare a screenshot for OCR: grayscale, invert if it's a dark-theme shot
+ * (light text on black), and stretch contrast. Keeps the same dimensions so the
+ * OCR text positions still align with the colour canvas used for green picks.
+ */
+function preprocessForOcr(src: HTMLCanvasElement): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = src.width;
+  c.height = src.height;
+  const ctx = c.getContext('2d')!;
+  ctx.drawImage(src, 0, 0);
+  const img = ctx.getImageData(0, 0, c.width, c.height);
+  const d = img.data;
+
+  // Average luminance → is this a dark-background screenshot?
+  let sum = 0;
+  for (let i = 0; i < d.length; i += 4) sum += 0.299 * d[i]! + 0.587 * d[i + 1]! + 0.114 * d[i + 2]!;
+  const dark = sum / (d.length / 4) < 115;
+
+  for (let i = 0; i < d.length; i += 4) {
+    let g = 0.299 * d[i]! + 0.587 * d[i + 1]! + 0.114 * d[i + 2]!;
+    if (dark) g = 255 - g; // invert so text is dark on light
+    g = Math.max(0, Math.min(255, (g - 128) * 1.5 + 128)); // contrast stretch
+    d[i] = d[i + 1] = d[i + 2] = g;
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
 }
 
 /** Flatten Tesseract's structured output into lines with bounding boxes. */
