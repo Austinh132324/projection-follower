@@ -71,29 +71,31 @@ function Shell() {
   return (
     <div className="app">
       <FullscreenToggle />
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={tab}
-          initial={{ opacity: 0, x: 16 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -16 }}
-          transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-        >
-          {bets === null ? (
-            <div className="spinner" />
-          ) : (
-            <Page
-              tab={tab}
-              bets={bets}
-              filter={filter}
-              setFilter={setFilter}
-              onNav={setTab}
-              onOpen={openDetail}
-              onAdd={() => setOverlay({ kind: 'add' })}
-            />
-          )}
-        </motion.div>
-      </AnimatePresence>
+      <div className="app-scroll">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={tab}
+            initial={{ opacity: 0, x: 16 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -16 }}
+            transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+          >
+            {bets === null ? (
+              <div className="spinner" />
+            ) : (
+              <Page
+                tab={tab}
+                bets={bets}
+                filter={filter}
+                setFilter={setFilter}
+                onNav={setTab}
+                onOpen={openDetail}
+                onAdd={() => setOverlay({ kind: 'add' })}
+              />
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </div>
 
       <BottomNav active={tab} onChange={setTab} onAdd={() => setOverlay({ kind: 'add' })} />
 

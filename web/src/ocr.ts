@@ -358,40 +358,62 @@ export function draftFromText(text: string): BetDraft {
     .filter((l) => l.length > 2 && !/^\$?[\d.,+\-\s%]+$/.test(l));
   const matchup = mm ? `${mm[1]!.trim()} v ${mm[2]!.trim()}` : stackedTeams(lines);
 
-  const legLines = lines.filter(
-    (l) => /[+-]\d{2,4}(?![\d:])|over|under|\bml\b|spread|moneyline/i.test(l) && !/\bvs?\b/i.test(l),
+  // A leg line = a real selection with American odds (not a matchup, clock,
+  // score, wager/payout label, or promo line). Garbled OCR lines are rejected.
+  const strip = (l: string) => l.replace(/([+-]\d{2,4})(?![\d:])/g, '').replace(/\s+/g, ' ').trim();
+  const oddsLines = lines.filter(
+    (l) =>
+      /(^|[^\d:])[+-]\d{2,4}(?![\d:])/.test(l) &&
+      !/\bvs?\b|\d{1,2}:\d{2}/i.test(l) &&
+      !isDescriptor(l) &&
+      !/wager|payout|cash\s*out|returned|bet\s*id|placed|profit boost/i.test(l),
   );
-  const chosen = (legLines.length ? legLines : lines).slice(0, 8);
-  if (chosen.length) {
-    draft.legs = chosen.map((l) => {
-      const legOdds = l.match(/([+-]\d{2,4})(?![\d:])/);
-      const idx = lines.indexOf(l);
-      const next = idx >= 0 ? lines[idx + 1] : undefined;
-      const market = next && isDescriptor(next) ? titleize(next) : '';
-      return {
-        selection: l.replace(/([+-]\d{2,4})(?![\d:])/g, '').replace(/\s+/g, ' ').trim(),
-        market,
-        event: matchup,
-        oddsAmerican: legOdds ? Number(legOdds[1]) : null,
-        result: null,
-      };
-    });
-    if (draft.legs.length > 1 && draft.betType === 'single') draft.betType = 'parlay';
-  }
+  // Only lines whose non-odds text has real letters count as selections.
+  const selLines = oddsLines.filter((l) => strip(l).replace(/[^A-Za-zÀ-ÿ]/g, '').length >= 3);
 
-  const first = draft.legs[0];
-  if (draft.betType !== 'parlay' && first) {
-    if (!first.selection && mm) first.selection = mm[1]!.trim();
-    if (!first.market && !/over|under|spread|\d+\.5/i.test(first.selection)) first.market = 'Moneyline';
-    first.oddsAmerican = draft.oddsAmerican;
-    if (draft.status === 'settled') first.result = draft.result;
-    // Exotic soccer/prop markets (throw-ins, corners, cards, half-time…).
-    if (/throw|corner|booking|card|offside|foul|half.?time|match outcome|to (qualify|score)/i.test(`${first.selection} ${first.market}`)) {
+  const buildLeg = (line: string): DraftLeg => {
+    const o = line.match(/([+-]\d{2,4})(?![\d:])/);
+    const idx = lines.indexOf(line);
+    const nxt = idx >= 0 ? lines[idx + 1] : undefined;
+    return {
+      selection: strip(line),
+      market: nxt && isDescriptor(nxt) ? titleize(nxt) : '',
+      event: matchup,
+      oddsAmerican: o ? Number(o[1]) : null,
+      result: null,
+    };
+  };
+
+  const isParlay = selLines.length >= 2;
+  if (isParlay) {
+    draft.betType = 'parlay';
+    draft.legs = selLines.slice(0, 14).map(buildLeg);
+  } else {
+    // SINGLE bet → exactly one leg. Prefer a real odds line; else the matchup's
+    // first team; else a clean candidate line. Never slice many lines.
+    const src = selLines[0] ?? oddsLines[0];
+    const leg: DraftLeg = src
+      ? buildLeg(src)
+      : { selection: mm ? mm[1]!.trim() : bestSelection(lines), market: '', event: matchup, oddsAmerican: null, result: null };
+    if (!leg.selection && mm) leg.selection = mm[1]!.trim();
+    if (!leg.market && !/over|under|spread|\d+\.5/i.test(leg.selection)) leg.market = 'Moneyline';
+    leg.oddsAmerican = draft.oddsAmerican;
+    if (draft.status === 'settled') leg.result = draft.result;
+    if (draft.betType === 'parlay') draft.betType = 'single';
+    if (/throw|corner|booking|card|offside|foul|half.?time|match outcome|to (qualify|score)/i.test(`${leg.selection} ${leg.market}`)) {
       draft.betType = 'prop';
     }
+    draft.legs = [leg];
   }
 
   return draft;
+}
+
+/** A reasonable single-bet selection when there are no odds lines: the first
+ *  line with letters that isn't obviously a label / chrome. */
+function bestSelection(lines: string[]): string {
+  const bad = /wager|payout|cash|return|bet\s*id|placed|profit boost|recent|\ball\b|open|settled|saved|total|to win|my bets|\bar\b/i;
+  return lines.find((l) => /[A-Za-z]{3}/.test(l) && !bad.test(l) && l.length <= 42) ?? '';
 }
 
 interface SettledInfo {
